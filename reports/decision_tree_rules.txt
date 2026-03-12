@@ -1,0 +1,43 @@
+|--- systolic_bp <= -0.03
+|   |--- bmi <= -0.19
+|   |   |--- hemoglobin <= -0.25
+|   |   |   |--- diastolic_bp <= -1.08
+|   |   |   |   |--- class: 0
+|   |   |   |--- diastolic_bp >  -1.08
+|   |   |   |   |--- truncated branch of depth 7
+|   |   |--- hemoglobin >  -0.25
+|   |   |   |--- systolic_bp <= -0.79
+|   |   |   |   |--- class: 0
+|   |   |   |--- systolic_bp >  -0.79
+|   |   |   |   |--- truncated branch of depth 6
+|   |--- bmi >  -0.19
+|   |   |--- hemoglobin <= -0.05
+|   |   |   |--- fasting_blood_glucose <= 0.26
+|   |   |   |   |--- truncated branch of depth 7
+|   |   |   |--- fasting_blood_glucose >  0.26
+|   |   |   |   |--- truncated branch of depth 7
+|   |   |--- hemoglobin >  -0.05
+|   |   |   |--- history_hypertension <= 0.50
+|   |   |   |   |--- truncated branch of depth 7
+|   |   |   |--- history_hypertension >  0.50
+|   |   |   |   |--- truncated branch of depth 2
+|--- systolic_bp >  -0.03
+|   |--- bmi <= -0.23
+|   |   |--- hemoglobin <= 1.46
+|   |   |   |--- systolic_bp <= 1.30
+|   |   |   |   |--- truncated branch of depth 7
+|   |   |   |--- systolic_bp >  1.30
+|   |   |   |   |--- truncated branch of depth 5
+|   |   |--- hemoglobin >  1.46
+|   |   |   |--- class: 0
+|   |--- bmi >  -0.23
+|   |   |--- hemoglobin <= 0.32
+|   |   |   |--- fasting_blood_glucose <= -0.42
+|   |   |   |   |--- truncated branch of depth 7
+|   |   |   |--- fasting_blood_glucose >  -0.42
+|   |   |   |   |--- truncated branch of depth 7
+|   |   |--- hemoglobin >  0.32
+|   |   |   |--- systolic_bp <= 0.78
+|   |   |   |   |--- truncated branch of depth 7
+|   |   |   |--- systolic_bp >  0.78
+|   |   |   |   |--- truncated branch of depth 7

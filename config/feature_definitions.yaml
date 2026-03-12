@@ -1,0 +1,199 @@
+# Feature Definitions for Maternal Health Predictive Model
+# All parameters sourced from peer-reviewed Nigerian / West African studies.
+# Full citations and rationale documented in DATA_SOURCES.md
+
+features:
+  # --- Observable Clinical Indicators ---
+  systolic_bp:
+    description: "Systolic blood pressure (mmHg)"
+    type: continuous
+    normal_range: [90, 120]
+    high_risk_threshold: 140
+    truncation: [85, 200]
+    distribution:
+      mean: 112.0
+      std: 12.0
+    sources:
+      - "Okonofua et al. (1992) PMID:1468822 — Mean ±2SD of 130/80 mmHg in Nigerian pregnant women"
+      - "Amoakoh-Coleman et al. (2017) PMC5718510 — Mean 111.0 ± 11.1 mmHg in West African pregnant women"
+
+  diastolic_bp:
+    description: "Diastolic blood pressure (mmHg)"
+    type: continuous
+    normal_range: [60, 80]
+    high_risk_threshold: 90
+    truncation: [50, 130]
+    distribution:
+      mean: 70.0
+      std: 10.0
+    sources:
+      - "Okonofua et al. (1992) PMID:1468822 — Mean ±2SD of 130/80 mmHg in Nigerian pregnant women"
+      - "Amoakoh-Coleman et al. (2017) PMC5718510 — Mean 68.9 ± 9.3 mmHg in West African pregnant women"
+
+  hemoglobin:
+    description: "Hemoglobin level (g/dL)"
+    type: continuous
+    normal_range: [11.0, 15.0]
+    low_risk_threshold: 11.0
+    high_risk_threshold_severe: 7.0
+    truncation: [4.0, 17.0]
+    distribution:
+      mean: 10.9
+      std: 1.8
+    sources:
+      - "Akinbami et al. (2013) PMID:23662089 — Overall mean 10.94 ± 1.86 g/dL in Lagos, Nigeria (n=274)"
+      - "Trimester values: 1st=11.59±2.35, 2nd=10.81±1.72, 3rd=10.38±1.27 g/dL"
+
+  bmi:
+    description: "Body Mass Index at booking (kg/m²)"
+    type: continuous
+    normal_range: [18.5, 24.9]
+    overweight_threshold: 25.0
+    obese_threshold: 30.0
+    truncation: [14.0, 50.0]
+    distribution:
+      mean: 27.0
+      std: 5.4
+    category_prevalence:
+      underweight: 0.029
+      normal: 0.369
+      overweight: 0.346
+      obese: 0.256
+    sources:
+      - "Senbanjo et al. (2021) PMID:34527152 — Mean 27.0 ± 5.4 kg/m² at booking in Lagos (n=344)"
+      - "Range: 13.6–49.4 kg/m²; 60.2% overweight or obese"
+
+  fasting_blood_glucose:
+    description: "Fasting blood glucose (mg/dL)"
+    type: continuous
+    normal_range: [60, 95]
+    high_risk_threshold: 126
+    gestational_dm_threshold: 95
+    truncation: [40, 200]
+    distribution:
+      mean: 74.5
+      std: 11.5
+    sources:
+      - "Olokor et al. (2016) PMID:27512415 — Mean 74.5 ± 11.5 mg/dL in normal pregnant Nigerians (n=210)"
+      - "Range: 42–117 mg/dL; at 24-28 weeks gestation, Lagos"
+
+  weight_gain:
+    description: "Total gestational weight gain (kg)"
+    type: continuous
+    normal_range: [7.0, 16.0]
+    excessive_threshold: 18.0
+    insufficient_threshold: 7.0
+    truncation: [0, 30]
+    distribution:
+      mean: 10.7
+      std: 3.4
+    sources:
+      - "Eze et al. (2017) PMID:28656932 — Mean 10.7 ± 3.4 kg in Enugu, Nigeria (n=200)"
+      - "Recruited <14 weeks, followed to 38-39 weeks; mean birthweight 3.3 ± 0.6 kg"
+
+  # --- Documented Medical History ---
+  history_hypertension:
+    description: "Pre-existing hypertension diagnosis"
+    type: binary
+    prevalence: 0.08
+    sources:
+      - "Okonofua et al. (2024) PMID:38960882 — HDP prevalence 6.4% across 54 Nigerian facilities (n=71,758)"
+      - "Adeloye et al. (2015) PMID:25380154 — General hypertension prevalence ~28.9% in Nigerian adults"
+      - "Adopted 8% for pre-existing hypertension (chronic component of HDP + undiagnosed)"
+
+  gestational_diabetes:
+    description: "Gestational diabetes mellitus diagnosis"
+    type: binary
+    prevalence: 0.05
+    sources:
+      - "Mustapha et al. (2021) PMID:34760670 — Pooled prevalence 11.0% (95% CI 8-13%), meta-analysis (n=46,210)"
+      - "Anzaku & Musa (2013) PMID:23224650 — Prevalence 8.3% using WHO 75g OGTT"
+      - "Adopted 5% as conservative population-level estimate (high I²=99%, many unscreened)"
+
+  previous_cesarean:
+    description: "History of previous cesarean section"
+    type: binary
+    prevalence: 0.03
+    sources:
+      - "Adewuyi et al. (2019) PMID:31213450 — National CS rate 2.1% (NDHS 2013, n=31,171)"
+      - "South-West regional rate: 4.7%; adopted 3% as compromise for mixed population"
+
+  previous_preeclampsia:
+    description: "History of preeclampsia in prior pregnancy"
+    type: binary
+    prevalence: 0.04
+    sources:
+      - "Ogunlaja et al. (2024) PMID:39363380 — Pooled PE prevalence 4.51% (95% CI 3.82-5.29%)"
+      - "Systematic review & meta-analysis of Nigerian studies"
+
+  # --- Demographic and Contextual Factors ---
+  maternal_age:
+    description: "Age of the mother (years)"
+    type: continuous
+    normal_range: [20, 34]
+    high_risk_young: 18
+    high_risk_advanced: 35
+    truncation: [15, 48]
+    distribution:
+      mean: 29.0
+      std: 5.5
+    sources:
+      - "Senbanjo et al. (2021) PMID:34527152 — Mean 30.9 ± 4.2 years in Lagos tertiary (n=344)"
+      - "Olokor et al. (2016) PMID:27512415 — Mean 30.9 ± 4.1 years in Lagos (n=210)"
+      - "Ugwuja et al. (2011) PMID:21608425 — Mean 27.04 ± 2.75 years in community sample"
+      - "Adopted 29.0 ± 5.5 to represent mixed urban-rural Nigerian population"
+
+  parity:
+    description: "Number of previous deliveries"
+    type: discrete
+    range: [0, 10]
+    distribution:
+      type: poisson
+      lambda: 2.5
+    sources:
+      - "Olokor et al. (2016) PMID:27512415 — Mean parity 1.2 ± 1.1 (tertiary, urban)"
+      - "NDHS 2018 — Total fertility rate 5.3 children per woman (national)"
+      - "Senbanjo et al. (2021) — 48.8% nulliparous in Lagos tertiary"
+      - "Adopted Poisson(λ=2.5) to represent mixed urban-rural population"
+
+  antenatal_visits:
+    description: "Number of antenatal care visits"
+    type: discrete
+    normal_range: [4, 8]
+    low_threshold: 4
+    truncation: [0, 15]
+    distribution:
+      type: poisson
+      lambda: 4.0
+    sources:
+      - "Fagbamigbe et al. (2020) PMID:33182288 — 46.7% had <4 visits (pooled NDHS, n=52,654)"
+      - "74.8% had late ANC timing (after 1st trimester)"
+      - "Poisson(λ=4.0) yields ~43% below 4 visits, matching observed data"
+
+  socioeconomic_status:
+    description: "Socioeconomic status (Low / Middle / High)"
+    type: categorical
+    categories: ["Low", "Middle", "High"]
+    distribution: [0.35, 0.40, 0.25]
+    sources:
+      - "NDHS 2018 — Wealth quintiles (each ~20% by design)"
+      - "World Bank 2022 — ~40% of Nigerians live below poverty line"
+      - "Collapsed to 3 categories: Low (bottom 2 quintiles ~35%), Middle (~40%), High (~25%)"
+
+  facility_type:
+    description: "Healthcare facility type"
+    type: categorical
+    categories: ["primary_health_centre", "general_hospital", "tertiary_hospital", "private_clinic"]
+    distribution: [0.40, 0.30, 0.15, 0.15]
+    sources:
+      - "Bolarinwa et al. (2021) PMC8568178 — 41% health facility delivery (NDHS 2018, n=34,193)"
+      - "Distribution reflects Nigerian health system pyramid: PHC base, fewer secondary/tertiary"
+
+target:
+  risk_label:
+    description: "Pregnancy risk classification"
+    type: binary
+    values:
+      0: "low_risk"
+      1: "high_risk"
+    expected_prevalence: 0.25

@@ -1,0 +1,97 @@
+# Risk Classification Criteria
+# A pregnancy is labeled HIGH-RISK if ANY of the following conditions are met.
+# Based on WHO guidelines, ACOG recommendations, and Nigeria maternal health literature.
+
+risk_rules:
+  # --- Blood Pressure ---
+  - name: "Hypertension in Pregnancy"
+    condition: "systolic_bp >= 140 OR diastolic_bp >= 90"
+    severity: high
+
+  - name: "Severe Hypertension"
+    condition: "systolic_bp >= 160 OR diastolic_bp >= 110"
+    severity: critical
+
+  # --- Anaemia ---
+  - name: "Moderate Anaemia"
+    condition: "hemoglobin < 11.0"
+    severity: moderate
+
+  - name: "Severe Anaemia"
+    condition: "hemoglobin < 7.0"
+    severity: critical
+
+  # --- Obesity ---
+  - name: "Obesity in Pregnancy"
+    condition: "bmi >= 30.0"
+    severity: moderate
+
+  - name: "Severe Obesity"
+    condition: "bmi >= 35.0"
+    severity: high
+
+  # --- Blood Glucose ---
+  - name: "Gestational Diabetes (Fasting)"
+    condition: "fasting_blood_glucose >= 95"
+    severity: moderate
+
+  - name: "Overt Diabetes"
+    condition: "fasting_blood_glucose >= 126"
+    severity: high
+
+  # --- Weight Gain ---
+  - name: "Excessive Weight Gain"
+    condition: "weight_gain > 18.0"
+    severity: moderate
+
+  - name: "Insufficient Weight Gain"
+    condition: "weight_gain < 7.0"
+    severity: moderate
+
+  # --- Medical History ---
+  - name: "Pre-existing Hypertension"
+    condition: "history_hypertension == 1"
+    severity: high
+
+  - name: "Gestational Diabetes History"
+    condition: "gestational_diabetes == 1"
+    severity: high
+
+  - name: "Previous Cesarean"
+    condition: "previous_cesarean == 1"
+    severity: moderate
+
+  - name: "Previous Preeclampsia"
+    condition: "previous_preeclampsia == 1"
+    severity: high
+
+  # --- Demographic ---
+  - name: "Advanced Maternal Age"
+    condition: "maternal_age >= 35"
+    severity: moderate
+
+  - name: "Very Young Mother"
+    condition: "maternal_age < 18"
+    severity: moderate
+
+  - name: "Grand Multiparity"
+    condition: "parity >= 5"
+    severity: moderate
+
+  - name: "Low Antenatal Attendance"
+    condition: "antenatal_visits < 4"
+    severity: moderate
+
+# Composite rule: high-risk if severity >= high OR count(moderate) >= 4
+# Note: threshold raised to 4 because evidence-based Nigerian parameters
+# place the population mean near clinical cutoffs (e.g. Hb mean 10.9 g/dL
+# vs WHO anaemia <11.0 g/dL), causing high overlap of individual moderate
+# flags. With threshold=4, high-risk prevalence ≈ 28%, close to target 25%.
+composite_rule:
+  description: >
+    A pregnancy is classified as high-risk if at least one HIGH or CRITICAL
+    severity condition is met, OR if four or more MODERATE severity conditions
+    are simultaneously present.
+  high_risk_if:
+    - "any condition with severity >= high"
+    - "count of moderate conditions >= 4"
