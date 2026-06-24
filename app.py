@@ -263,7 +263,7 @@ if page == "🔮 Predict":
         # Scale
         try:
             scaler = load_scaler()
-            X_scaled = scaler.transform(X_raw)
+            SCALE_COLS = [0,1,2,3,4,5,6,7,8]
         except Exception as e:
             st.error(f"Could not load scaler: {e}")
             st.stop()
