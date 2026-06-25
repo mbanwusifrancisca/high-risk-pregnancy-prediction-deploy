@@ -4,7 +4,11 @@ app.py — Production-ready Streamlit frontend for High-Risk Pregnancy Predictio
 Deployment target : Streamlit Community Cloud
 Entry point       : app.py (repo root)
 Models supported  : Logistic Regression, Decision Tree, Random Forest, MLP (.keras)
-Scaler            : models/scaler.joblib  (fitted on 9 continuous features)
+Scaler            : models/scaler.joblib  (fitted on 10 features — verified)
+
+Scaler feature_names_in_ (exact, in order):
+  maternal_age, parity, antenatal_visits, socioeconomic_status,
+  systolic_bp, diastolic_bp, hemoglobin, bmi, fasting_blood_glucose, weight_gain
 
 Run locally:
     streamlit run app.py
@@ -47,18 +51,20 @@ SKLEARN_MODELS = {
 MLP_PATH = os.path.join(MODELS_DIR, "mlp_model.keras")
 
 # ─── Feature configuration ────────────────────────────────────────────────────
+# Keys match EXACTLY the column names used during training (verified from scaler
+# feature_names_in_ and preprocess.py). Do not rename these keys.
 # Layout: label, dtype, min, max, default, step, unit_or_options_dict
 FEATURE_CONFIG = {
     "maternal_age":          ("Maternal age",               "int",   14,   55,  28,   1,    "years"),
-    "systolic_bp":           ("Systolic BP",                "float", 70,  200, 118,   1.0,  "mmHg"),
-    "diastolic_bp":          ("Diastolic BP",               "float", 40,  130,  76,   1.0,  "mmHg"),
-    "haemoglobin":           ("Haemoglobin",                "float",  5,   18,  11.5, 0.1,  "g/dL"),
-    "bmi":                   ("BMI",                        "float", 15,   55,  26.0, 0.1,  "kg/m²"),
-    "fasting_blood_glucose": ("Fasting blood glucose",      "float",  3,   20,   5.2, 0.1,  "mmol/L"),
-    "weight_gain_kg":        ("Gestational weight gain",    "float",  0,   30,  12.0, 0.5,  "kg"),
     "parity":                ("Parity",                     "int",    0,   10,   1,   1,    "deliveries"),
     "antenatal_visits":      ("Antenatal care visits",      "int",    0,   20,   4,   1,    "visits"),
     "socioeconomic_status":  ("Socioeconomic status",       "cat",   None,None,None,  None, {"Low": 0, "Middle": 1, "High": 2}),
+    "systolic_bp":           ("Systolic BP",                "float", 70,  200, 118,   1.0,  "mmHg"),
+    "diastolic_bp":          ("Diastolic BP",               "float", 40,  130,  76,   1.0,  "mmHg"),
+    "hemoglobin":            ("Haemoglobin",                "float",  5,   18,  11.5, 0.1,  "g/dL"),
+    "bmi":                   ("BMI",                        "float", 15,   55,  26.0, 0.1,  "kg/m²"),
+    "fasting_blood_glucose": ("Fasting blood glucose",      "float",  3,   20,   5.2, 0.1,  "mmol/L"),
+    "weight_gain":           ("Gestational weight gain",    "float",  0,   30,  12.0, 0.5,  "kg"),
     "facility_type":         ("Facility type",              "cat",   None,None,None,  None, {"Primary": 0, "Secondary": 1, "Tertiary": 2}),
     "history_hypertension":  ("History of hypertension",    "bin",   None,None, 0,   None, None),
     "gestational_diabetes":  ("Gestational diabetes",       "bin",   None,None, 0,   None, None),
@@ -66,14 +72,17 @@ FEATURE_CONFIG = {
     "previous_preeclampsia": ("Previous pre-eclampsia",     "bin",   None,None, 0,   None, None),
 }
 
-# Exact column order used during training (see preprocess.py)
+# Exact column order used during training
 ALL_KEYS = list(FEATURE_CONFIG.keys())
 
-# Continuous features passed to StandardScaler (binary/categorical excluded)
-# The scaler was fitted on these 9 features only (n_features_in_ == 9)
+# These 10 features were scaled — verified from scaler.feature_names_in_
+# Order matches scaler exactly: maternal_age, parity, antenatal_visits,
+# socioeconomic_status, systolic_bp, diastolic_bp, hemoglobin, bmi,
+# fasting_blood_glucose, weight_gain
 CONTINUOUS_KEYS = [
-    "maternal_age", "systolic_bp", "diastolic_bp", "haemoglobin",
-    "bmi", "fasting_blood_glucose", "weight_gain_kg", "parity", "antenatal_visits",
+    "maternal_age", "parity", "antenatal_visits", "socioeconomic_status",
+    "systolic_bp", "diastolic_bp", "hemoglobin", "bmi",
+    "fasting_blood_glucose", "weight_gain",
 ]
 SCALE_IDX = [ALL_KEYS.index(k) for k in CONTINUOUS_KEYS]
 
@@ -222,10 +231,10 @@ def feature_bar_chart(values: dict) -> plt.Figure:
         "maternal_age":          (15, 45, "years"),
         "systolic_bp":           (90, 160, "mmHg"),
         "diastolic_bp":          (60, 110, "mmHg"),
-        "haemoglobin":           (7,  16,  "g/dL"),
+        "hemoglobin":            (7,  16,  "g/dL"),
         "bmi":                   (16, 45,  "kg/m²"),
         "fasting_blood_glucose": (3,  15,  "mmol/L"),
-        "weight_gain_kg":        (4,  25,  "kg"),
+        "weight_gain":           (4,  25,  "kg"),
         "parity":                (0,  8,   ""),
         "antenatal_visits":      (0,  12,  "visits"),
     }
@@ -387,8 +396,8 @@ elif page == "🔮 Prediction":
     with st.expander("📋 Clinical Measurements", expanded=True):
         c1, c2, c3 = st.columns(3)
         clinical_keys = [
-            "systolic_bp", "diastolic_bp", "haemoglobin",
-            "bmi", "fasting_blood_glucose", "weight_gain_kg",
+            "systolic_bp", "diastolic_bp", "hemoglobin",
+            "bmi", "fasting_blood_glucose", "weight_gain",
         ]
         for i, key in enumerate(clinical_keys):
             label, dtype, mn, mx, default, step, unit = FEATURE_CONFIG[key]
@@ -439,7 +448,7 @@ elif page == "🔮 Prediction":
         warnings_list.append("⚠️ Systolic BP should be greater than Diastolic BP.")
     if values.get("maternal_age", 28) >= 35:
         warnings_list.append("ℹ️ Advanced maternal age (≥35) is a known risk factor.")
-    if values.get("haemoglobin", 11.5) < 8:
+    if values.get("hemoglobin", 11.5) < 8:
         warnings_list.append("⚠️ Haemoglobin < 8 g/dL — severe anaemia range.")
 
     for w in warnings_list:
