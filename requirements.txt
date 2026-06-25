@@ -1,10 +1,15 @@
-numpy 
-pandas 
-scikit-learn 
-imbalanced-learn 
-matplotlib 
-seaborn 
-joblib 
-pyyaml 
-streamlit 
-tensorflow-cpu==2.15.1 
+# requirements.txt — High-Risk Pregnancy Prediction (Streamlit Cloud deployment)
+# ──────────────────────────────────────────────────────────────────────────────
+# Packages required by app.py at runtime.
+# imbalanced-learn and pyyaml are training-only; they are NOT needed at inference.
+# seaborn is not imported by app.py; removed.
+# tensorflow-cpu is kept because MLP (.keras) model loading requires it.
+# ──────────────────────────────────────────────────────────────────────────────
+
+numpy
+pandas
+scikit-learn
+joblib
+matplotlib
+streamlit
+tensorflow-cpu==2.15.1
