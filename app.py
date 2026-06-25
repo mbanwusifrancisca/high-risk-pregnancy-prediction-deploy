@@ -49,10 +49,10 @@ FEATURE_CONFIG = {
     "maternal_age":           ("Maternal age",              "int",   14,  55,  28,   1,    "years"),
     "systolic_bp":            ("Systolic blood pressure",   "float", 70,  200, 118,  1.0,  "mmHg"),
     "diastolic_bp":           ("Diastolic blood pressure",  "float", 40,  130, 76,   1.0,  "mmHg"),
-    "haemoglobin":            ("Haemoglobin",               "float", 5,   18,  11.5, 0.1,  "g/dL"),
+    "hemoglobin":            ("Haemoglobin",               "float", 5,   18,  11.5, 0.1,  "g/dL"),
     "bmi":                    ("BMI",                       "float", 15,  55,  26.0, 0.1,  "kg/m²"),
     "fasting_blood_glucose":  ("Fasting blood glucose",     "float", 3,   20,  5.2,  0.1,  "mmol/L"),
-    "weight_gain_kg":         ("Gestational weight gain",   "float", 0,   30,  12.0, 0.5,  "kg"),
+    "weight_gain":         ("Gestational weight gain",   "float", 0,   30,  12.0, 0.5,  "kg"),
     "parity":                 ("Parity",                    "int",   0,   10,  1,    1,    "deliveries"),
     "antenatal_visits":       ("Antenatal care visits",     "int",   0,   20,  4,    1,    "visits"),
     "socioeconomic_status":   ("Socioeconomic status",      "cat",   None,None,None, None, {"Low": 0, "Middle": 1, "High": 2}),
@@ -66,8 +66,8 @@ FEATURE_CONFIG = {
 # Indices of continuous features that the scaler was trained on
 # (everything except binary and categorical — adjust if your pipeline differs)
 CONTINUOUS_KEYS = [
-    "maternal_age", "systolic_bp", "diastolic_bp", "haemoglobin",
-    "bmi", "fasting_blood_glucose", "weight_gain_kg", "parity", "antenatal_visits",
+    "maternal_age", "parity", "antenatal_visits", "socioeconomic_status",
+    "systolic_bp", "diastolic_bp", "hemoglobin", "bmi", "fasting_blood_glucose", "weight_gain",
 ]
 ALL_KEYS = list(FEATURE_CONFIG.keys())
 SCALE_IDX = [ALL_KEYS.index(k) for k in CONTINUOUS_KEYS]
@@ -219,8 +219,8 @@ if page == "🔮 Predict":
         c1, c2, c3 = st.columns(3)
         cols = [c1, c2, c3]
         clinical_keys = [
-            "systolic_bp", "diastolic_bp", "haemoglobin",
-            "bmi", "fasting_blood_glucose", "weight_gain_kg",
+            "systolic_bp", "diastolic_bp", "hemoglobin",
+            "bmi", "fasting_blood_glucose", "weight_gain",
         ]
         for i, key in enumerate(clinical_keys):
             label, dtype, mn, mx, default, step, unit = FEATURE_CONFIG[key]
