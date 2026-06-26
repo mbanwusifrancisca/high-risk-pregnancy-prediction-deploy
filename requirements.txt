@@ -1,13 +1,8 @@
 # requirements.txt — MaternaCare (Streamlit Cloud deployment)
 # ──────────────────────────────────────────────────────────────────────────────
-# Verified from models/mlp_model.keras → metadata.json:
-#   {"keras_version": "3.13.2", "date_saved": "2026-03-12"}
-#
-# The MLP was saved with standalone Keras 3.13.2. TF 2.21 bundles an older
-# Keras 3 (~3.10), which can't deserialize newer layer configs that include
-# the `quantization_config` field. Pinning `keras==3.13.2` explicitly forces
-# pip to install the same Keras version that saved the model. After import,
-# `from tensorflow import keras` resolves to this standalone install.
+# Deployment uses Logistic Regression (best AUC-ROC = 0.933, F1 = 0.759).
+# TensorFlow/Keras is no longer required since the MLP is not used at runtime.
+# Build time is now ~30 seconds instead of ~5 minutes.
 # ──────────────────────────────────────────────────────────────────────────────
 
 numpy
@@ -16,5 +11,3 @@ scikit-learn
 joblib
 matplotlib
 streamlit
-tensorflow-cpu==2.21.0
-keras==3.13.2

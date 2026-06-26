@@ -5,7 +5,7 @@ A final-year Biomedical Engineering project investigating machine learning
 for early identification of high-risk pregnancies in Nigerian healthcare.
 
 Deployment    : Streamlit Community Cloud
-Inference     : MLP (TensorFlow/Keras) only — best-performing model
+Inference     : Logistic Regression (scikit-learn) — best AUC-ROC (0.933)
 Pipeline      : 10 scaled features + 4 binary features + 3 one-hot facility = 17 inputs
 Risk tiers    : <40% Low · 40–65% Moderate · >65% High (single source of truth)
 """
@@ -431,7 +431,7 @@ MODELS_DIR       = "models"
 REPORTS_DIR      = "reports"
 FIGURES_DIR      = os.path.join(REPORTS_DIR, "figures")
 SCALER_PATH      = os.path.join(MODELS_DIR, "scaler.joblib")
-MLP_PATH         = os.path.join(MODELS_DIR, "mlp_model.keras")
+MODEL_PATH       = os.path.join(MODELS_DIR, "logistic_regression.joblib")
 COMPARISON_PATH  = os.path.join(REPORTS_DIR, "model_comparison.csv")
 CV_RESULTS_PATH  = os.path.join(REPORTS_DIR, "cv_results.json")
 THRESHOLDS_PATH  = os.path.join(REPORTS_DIR, "optimal_thresholds.json")
@@ -478,68 +478,19 @@ def load_scaler():
     return joblib.load(SCALER_PATH)
 
 
-@st.cache_resource(show_spinner="Loading MLP model…")
-def load_mlp():
+@st.cache_resource(show_spinner="Loading model…")
+def load_model():
     """
-    Load the MLP (.keras) model.
-
-    Forensic finding from models/mlp_model.keras → metadata.json:
-        keras_version: 3.13.2
-
-    We import the standalone `keras` package (pinned to 3.13.2 in requirements)
-    rather than tensorflow.keras, because the TF-bundled Keras lags behind
-    standalone Keras releases. Standalone Keras 3.13.2 matches the version
-    that saved the model.
+    Load the Logistic Regression model.
+    LR was selected for deployment because it achieved the highest AUC-ROC
+    (0.933) of all four models compared, with strong F1 (0.759) and
+    the additional benefit of interpretability for clinical settings.
     """
-    if not os.path.exists(MLP_PATH):
-        st.error(f"MLP model file not found at '{MLP_PATH}'.")
+    import joblib
+    if not os.path.exists(MODEL_PATH):
+        st.error(f"Model file not found at '{MODEL_PATH}'.")
         st.stop()
-
-    try:
-        # Standalone Keras 3.13+ — matches the saving version
-        import keras
-        model = keras.models.load_model(MLP_PATH, compile=False)
-        return model
-    except Exception as e_primary:
-        # Last-resort fallback: rebuild architecture in code and load only the
-        # weights. The .keras file is a zip containing model.weights.h5; we
-        # extract that and load weights into a manually-constructed network.
-        try:
-            import keras
-            from keras import Sequential
-            from keras.layers import Dense, BatchNormalization, Dropout, Input
-            import zipfile, tempfile
-
-            model = Sequential(name="sequential")
-            model.add(Input(shape=(17,), name="input_layer"))
-            model.add(Dense(64, activation="relu", name="dense"))
-            model.add(BatchNormalization(name="batch_normalization"))
-            model.add(Dropout(0.3, name="dropout"))
-            model.add(Dense(32, activation="relu", name="dense_1"))
-            model.add(BatchNormalization(name="batch_normalization_1"))
-            model.add(Dropout(0.3, name="dropout_1"))
-            model.add(Dense(16, activation="relu", name="dense_2"))
-            model.add(Dropout(0.2, name="dropout_2"))
-            model.add(Dense(1, activation="sigmoid", name="dense_3"))
-            model.build(input_shape=(None, 17))
-
-            with zipfile.ZipFile(MLP_PATH, "r") as zf:
-                weights_name = next(
-                    (n for n in zf.namelist() if n.endswith("weights.h5")), None
-                )
-                if weights_name is None:
-                    raise FileNotFoundError("No weights file inside .keras archive")
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    zf.extract(weights_name, tmpdir)
-                    model.load_weights(os.path.join(tmpdir, weights_name))
-            return model
-        except Exception as e_fallback:
-            st.error(
-                f"Could not load MLP model.\n\n"
-                f"**Primary loader (standalone Keras):** {e_primary}\n\n"
-                f"**Fallback loader (weight-only):** {e_fallback}"
-            )
-            st.stop()
+    return joblib.load(MODEL_PATH)
 
 
 @st.cache_data(show_spinner=False)
@@ -555,11 +506,11 @@ def load_json_file(path: str) -> dict:
 
 @st.cache_data(show_spinner=False)
 def get_validated_threshold() -> float:
-    """Load the MLP's F1-optimal threshold from training (used internally)."""
+    """Load the Logistic Regression F1-optimal threshold from training (used internally)."""
     if os.path.exists(THRESHOLDS_PATH):
         try:
             data = load_json_file(THRESHOLDS_PATH)
-            return float(data.get("MLP", 0.5))
+            return float(data.get("Logistic Regression", 0.5))
         except Exception:
             return 0.5
     return 0.5
@@ -607,18 +558,15 @@ def build_feature_dataframe(user_inputs: dict) -> pd.DataFrame:
     return final_df[FINAL_FEATURE_ORDER]
 
 
-def predict_with_mlp(user_inputs: dict) -> float:
+def predict(user_inputs: dict) -> float:
     """
     Single inference entry point.
     Returns one probability (float) — every downstream display derives from it.
     """
     X = build_feature_dataframe(user_inputs)
-    model = load_mlp()
-    # Cast to float32 for the Keras input layer
-    X_np = X.values.astype(np.float32)
-    raw = model.predict(X_np, verbose=0)
-    # Handle (1,1) or (1,) output shapes robustly
-    prob = float(raw.ravel()[0])
+    model = load_model()
+    # predict_proba returns shape (n_samples, n_classes); column 1 = positive class
+    prob = float(model.predict_proba(X)[0, 1])
     # Clamp to [0,1] for numerical safety
     return max(0.0, min(1.0, prob))
 
@@ -948,7 +896,7 @@ elif page.strip().startswith("👩‍⚕️"):
     ):
         # ─── Single prediction call ─────────────────────────────────────────
         try:
-            prob = predict_with_mlp(user_inputs)
+            prob = predict(user_inputs)
         except Exception as e:
             st.error(f"**Prediction failed:** {e}")
             st.stop()
@@ -1160,10 +1108,10 @@ that gap with a fast, model-driven second opinion.
         st.dataframe(styled, use_container_width=True)
     else:
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.metric("Training records", "5,000")
-        with c2: st.metric("MLP F1 score",     "0.78")
-        with c3: st.metric("MLP AUC-ROC",      "0.93")
-        with c4: st.metric("Patient features", "14")
+        with c1: st.metric("Training records",   "5,000")
+        with c2: st.metric("LR F1 score",        "0.76")
+        with c3: st.metric("LR AUC-ROC",         "0.93")
+        with c4: st.metric("Patient features",   "14")
 
     st.markdown("---")
 
@@ -1172,14 +1120,17 @@ that gap with a fast, model-driven second opinion.
     st.markdown(
         "This project compared four machine learning models to determine the "
         "best-performing model. The deployed application performs inference "
-        "using only the **MLP Neural Network**, which achieved the highest F1 "
-        "score. The other models remain documented here for transparency:"
+        "using only the **Logistic Regression** model, which achieved the "
+        "highest AUC-ROC (0.933) and offers strong interpretability for "
+        "clinical decision-support. The other models remain documented here "
+        "for transparency:"
     )
     models_df = pd.DataFrame({
-        "Model":    ["MLP Neural Network", "Logistic Regression", "Random Forest", "Decision Tree"],
-        "Type":     ["Feedforward deep learning", "Linear, interpretable baseline",
+        "Model":    ["Logistic Regression", "MLP Neural Network", "Random Forest", "Decision Tree"],
+        "Type":     ["Linear, interpretable baseline", "Feedforward deep learning",
                      "Ensemble (bagged trees)", "Rule-based, transparent"],
-        "F1 score": [0.777, 0.759, 0.728, 0.619],
+        "F1 score": [0.759, 0.777, 0.728, 0.619],
+        "AUC-ROC":  [0.933, 0.929, 0.904, 0.819],
         "Deployed": ["✅ Yes", "—", "—", "—"],
     }).set_index("Model")
     st.dataframe(models_df, use_container_width=True)
