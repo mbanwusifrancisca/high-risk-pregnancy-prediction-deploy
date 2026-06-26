@@ -482,36 +482,64 @@ def load_scaler():
 def load_mlp():
     """
     Load the MLP (.keras) model.
-    Requires TensorFlow ≥ 2.16 (Keras 3) — the model was saved with Keras 3
-    serialization which uses `batch_shape` and `optional` InputLayer kwargs.
-    """
-    try:
-        from tensorflow import keras
-    except ImportError as e:
-        st.error(
-            "TensorFlow could not be imported. "
-            "Check that `tensorflow-cpu==2.17.0` is in requirements.txt."
-        )
-        st.stop()
 
+    Forensic finding from models/mlp_model.keras → metadata.json:
+        keras_version: 3.13.2
+
+    We import the standalone `keras` package (pinned to 3.13.2 in requirements)
+    rather than tensorflow.keras, because the TF-bundled Keras lags behind
+    standalone Keras releases. Standalone Keras 3.13.2 matches the version
+    that saved the model.
+    """
     if not os.path.exists(MLP_PATH):
         st.error(f"MLP model file not found at '{MLP_PATH}'.")
         st.stop()
 
     try:
-        # compile=False skips re-creating optimizer state — faster and avoids
-        # version-specific optimizer config issues for inference-only use.
+        # Standalone Keras 3.13+ — matches the saving version
+        import keras
         model = keras.models.load_model(MLP_PATH, compile=False)
         return model
-    except Exception as e:
-        st.error(
-            "Could not load MLP model.\n\n"
-            f"**Details:** {e}\n\n"
-            "If the error mentions `batch_shape` or `Unrecognized keyword`, "
-            "the runtime is using Keras 2. Upgrade to "
-            "`tensorflow-cpu==2.17.0` (ships with Keras 3) in requirements.txt."
-        )
-        st.stop()
+    except Exception as e_primary:
+        # Last-resort fallback: rebuild architecture in code and load only the
+        # weights. The .keras file is a zip containing model.weights.h5; we
+        # extract that and load weights into a manually-constructed network.
+        try:
+            import keras
+            from keras import Sequential
+            from keras.layers import Dense, BatchNormalization, Dropout, Input
+            import zipfile, tempfile
+
+            model = Sequential(name="sequential")
+            model.add(Input(shape=(17,), name="input_layer"))
+            model.add(Dense(64, activation="relu", name="dense"))
+            model.add(BatchNormalization(name="batch_normalization"))
+            model.add(Dropout(0.3, name="dropout"))
+            model.add(Dense(32, activation="relu", name="dense_1"))
+            model.add(BatchNormalization(name="batch_normalization_1"))
+            model.add(Dropout(0.3, name="dropout_1"))
+            model.add(Dense(16, activation="relu", name="dense_2"))
+            model.add(Dropout(0.2, name="dropout_2"))
+            model.add(Dense(1, activation="sigmoid", name="dense_3"))
+            model.build(input_shape=(None, 17))
+
+            with zipfile.ZipFile(MLP_PATH, "r") as zf:
+                weights_name = next(
+                    (n for n in zf.namelist() if n.endswith("weights.h5")), None
+                )
+                if weights_name is None:
+                    raise FileNotFoundError("No weights file inside .keras archive")
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    zf.extract(weights_name, tmpdir)
+                    model.load_weights(os.path.join(tmpdir, weights_name))
+            return model
+        except Exception as e_fallback:
+            st.error(
+                f"Could not load MLP model.\n\n"
+                f"**Primary loader (standalone Keras):** {e_primary}\n\n"
+                f"**Fallback loader (weight-only):** {e_fallback}"
+            )
+            st.stop()
 
 
 @st.cache_data(show_spinner=False)

@@ -1,11 +1,13 @@
 # requirements.txt — MaternaCare (Streamlit Cloud deployment)
 # ──────────────────────────────────────────────────────────────────────────────
-# tensorflow-cpu==2.21.0 is the latest stable release (March 2026) and ships
-# with a Keras 3 version new enough to load the MLP model, which was saved
-# with a recent Keras 3 (uses `quantization_config` field on Dense layers).
+# Verified from models/mlp_model.keras → metadata.json:
+#   {"keras_version": "3.13.2", "date_saved": "2026-03-12"}
 #
-# Older TF/Keras versions throw:
-#   "Unrecognized keyword arguments passed to Dense: {'quantization_config': None}"
+# The MLP was saved with standalone Keras 3.13.2. TF 2.21 bundles an older
+# Keras 3 (~3.10), which can't deserialize newer layer configs that include
+# the `quantization_config` field. Pinning `keras==3.13.2` explicitly forces
+# pip to install the same Keras version that saved the model. After import,
+# `from tensorflow import keras` resolves to this standalone install.
 # ──────────────────────────────────────────────────────────────────────────────
 
 numpy
@@ -15,3 +17,4 @@ joblib
 matplotlib
 streamlit
 tensorflow-cpu==2.21.0
+keras==3.13.2
