@@ -1,24 +1,13 @@
 """
-app.py — High-Risk Pregnancy Prediction (Clinical Decision-Support Tool)
-========================================================================
-Deployment : Streamlit Community Cloud
-Audience   : Midwives, nurses, and obstetricians at Nigerian PHCs and hospitals
+MaternaCare — Clinical Decision-Support for High-Risk Pregnancy Screening
+=========================================================================
+A final-year Biomedical Engineering project investigating machine learning
+for early identification of high-risk pregnancies in Nigerian healthcare.
 
-PIPELINE (verified against scaler.feature_names_in_ and model.feature_names_in_):
-
-  Step 1 — Scale 10 features with StandardScaler (order matters):
-    maternal_age, parity, antenatal_visits, socioeconomic_status,
-    systolic_bp, diastolic_bp, hemoglobin, bmi, fasting_blood_glucose, weight_gain
-
-  Step 2 — Append 4 binary features (unscaled):
-    history_hypertension, gestational_diabetes,
-    previous_cesarean, previous_preeclampsia
-
-  Step 3 — One-hot encode facility_type into 3 columns:
-    facility_primary_health_centre, facility_private_clinic,
-    facility_tertiary_hospital
-
-  Step 4 — Final 17-column row → model.predict_proba()
+Deployment    : Streamlit Community Cloud
+Inference     : MLP (TensorFlow/Keras) only — best-performing model
+Pipeline      : 10 scaled features + 4 binary features + 3 one-hot facility = 17 inputs
+Risk tiers    : <40% Low · 40–65% Moderate · >65% High (single source of truth)
 """
 
 import os
@@ -28,27 +17,26 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 
 warnings.filterwarnings("ignore")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAGE CONFIG  (must be the first Streamlit call)
+# PAGE CONFIG  (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="MaternaCare — High-Risk Pregnancy Predictor",
+    page_title="MaternaCare — Clinical Decision-Support",
     page_icon="🌸",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ACCESSIBILITY-FIRST UI THEME
-# Palette: #E91E63 accent · #212121 text · #FFFFFF bg · WCAG AA contrast
+# ACCESSIBLE THEME  (locked to light mode via .streamlit/config.toml)
+# Palette: #E91E63 accent · #212121 text · #FFFFFF bg
+# WCAG AA contrast targets met on all text.
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-/* ─── Base reset ─── */
 .stApp {
     background: #FFFFFF;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
@@ -59,8 +47,9 @@ st.markdown("""
     color: #212121;
     line-height: 1.6;
 }
+.stApp small, .stApp .stCaption { color: #616161; }
 
-/* ─── Typography scale (responsive with clamp) ─── */
+/* ─── Headings ─── */
 h1, h2, h3, h4, h5, h6 {
     color: #212121 !important;
     font-weight: 700;
@@ -86,7 +75,7 @@ h1, h2, h3, h4, h5, h6 {
     margin: 1rem 0 0.5rem 0;
 }
 
-/* ─── Sidebar — clean white with pink accent border ─── */
+/* ─── Sidebar ─── */
 [data-testid="stSidebar"] {
     background: #FAFAFA;
     border-right: 1px solid #E0E0E0;
@@ -97,17 +86,8 @@ h1, h2, h3, h4, h5, h6 {
     border-bottom: 2px solid #F8BBD0;
     font-size: 1.5rem !important;
 }
-[data-testid="stSidebar"] .stRadio label {
-    padding: 0.5rem 0;
-    font-weight: 500;
-    color: #212121 !important;
-}
-[data-testid="stSidebar"] .stCaption,
-[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
-    color: #616161 !important;
-}
 
-/* ─── Primary button (action button) ─── */
+/* ─── Primary button ─── */
 .stButton > button[kind="primary"] {
     background: #E91E63;
     color: #FFFFFF !important;
@@ -116,36 +96,19 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.875rem 2rem;
     font-weight: 600;
     font-size: 1rem;
-    min-height: 48px;             /* WCAG touch target */
+    min-height: 48px;
     width: 100%;
     box-shadow: 0 2px 6px rgba(233, 30, 99, 0.25);
     transition: background 0.2s;
 }
-.stButton > button[kind="primary"]:hover {
-    background: #C2185B;
-    box-shadow: 0 4px 10px rgba(233, 30, 99, 0.35);
-}
+.stButton > button[kind="primary"]:hover { background: #C2185B; }
 .stButton > button[kind="primary"]:disabled {
     background: #BDBDBD;
     color: #FFFFFF !important;
     box-shadow: none;
 }
 
-/* ─── Secondary buttons ─── */
-.stButton > button:not([kind="primary"]) {
-    background: #FFFFFF;
-    color: #212121 !important;
-    border: 1.5px solid #E0E0E0;
-    border-radius: 8px;
-    font-weight: 500;
-    min-height: 44px;
-}
-.stButton > button:not([kind="primary"]):hover {
-    border-color: #E91E63;
-    color: #E91E63 !important;
-}
-
-/* ─── Expanders as cards ─── */
+/* ─── Expanders / cards ─── */
 [data-testid="stExpander"] {
     background: #FAFAFA;
     border: 1px solid #E0E0E0;
@@ -160,12 +123,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 1rem 1.25rem !important;
     background: #FAFAFA;
 }
-[data-testid="stExpander"] summary:hover {
-    background: #F5F5F5;
-}
-[data-testid="stExpander"] > div > div {
-    padding: 1rem 1.25rem !important;
-}
+[data-testid="stExpander"] summary:hover { background: #F5F5F5; }
 
 /* ─── Metric cards ─── */
 [data-testid="stMetric"] {
@@ -185,15 +143,9 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
     font-size: 1.5rem !important;
 }
-[data-testid="stMetricDelta"] {
-    color: #616161 !important;
-    font-size: 0.8rem;
-}
 
-/* ─── Input fields — visible borders, large touch targets ─── */
-.stNumberInput input,
-.stTextInput input,
-.stSelectbox > div > div {
+/* ─── Inputs ─── */
+.stNumberInput input, .stTextInput input, .stSelectbox > div > div {
     background: #FFFFFF !important;
     color: #212121 !important;
     border: 1.5px solid #BDBDBD !important;
@@ -201,36 +153,26 @@ h1, h2, h3, h4, h5, h6 {
     min-height: 44px;
     font-size: 1rem !important;
 }
-.stNumberInput input:focus,
-.stTextInput input:focus {
+.stNumberInput input:focus, .stTextInput input:focus {
     border-color: #E91E63 !important;
     box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.15) !important;
     outline: none !important;
 }
-.stNumberInput label,
-.stTextInput label,
-.stSelectbox label {
+.stNumberInput label, .stTextInput label, .stSelectbox label {
     color: #212121 !important;
     font-weight: 500;
     font-size: 0.95rem;
-    margin-bottom: 0.25rem;
 }
 
-/* ─── Checkboxes — larger, clearer ─── */
-.stCheckbox {
-    padding: 0.5rem 0;
-}
+/* ─── Checkboxes ─── */
 .stCheckbox label {
     color: #212121 !important;
     font-weight: 500;
     font-size: 0.95rem;
     line-height: 1.5;
 }
-.stCheckbox label > div:first-child {
-    border: 2px solid #BDBDBD;
-}
 
-/* ─── Alerts (info/warning/success/error) ─── */
+/* ─── Alerts ─── */
 .stAlert {
     border-radius: 10px;
     border-left-width: 5px;
@@ -238,91 +180,14 @@ h1, h2, h3, h4, h5, h6 {
 }
 .stAlert p { color: #212121 !important; font-weight: 500; }
 
-/* ─── DataFrames ─── */
+/* ─── DataFrame ─── */
 .stDataFrame {
     border-radius: 10px;
     overflow: hidden;
     border: 1px solid #E0E0E0;
 }
 
-/* ─── Result cards ─── */
-.result-card {
-    background: #FAFAFA;
-    border: 1px solid #E0E0E0;
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin: 1rem 0;
-}
-.result-card p, .result-card div, .result-card strong {
-    color: #212121 !important;
-}
-.result-card strong { font-weight: 700; }
-
-/* ─── Risk badges (replaces colored headings) ─── */
-.risk-badge {
-    display: inline-block;
-    padding: 0.625rem 1.25rem;
-    border-radius: 24px;
-    font-weight: 700;
-    font-size: 1.05rem;
-    letter-spacing: 0.02em;
-    margin-bottom: 1rem;
-}
-.risk-badge-low {
-    background: #E8F5E9;
-    color: #1B5E20;
-    border: 2px solid #2E7D32;
-}
-.risk-badge-moderate {
-    background: #FFF3E0;
-    color: #B85A00;
-    border: 2px solid #ED6C02;
-}
-.risk-badge-high {
-    background: #FFEBEE;
-    color: #B71C1C;
-    border: 2px solid #D32F2F;
-}
-
-/* ─── Probability bars ─── */
-.prob-label {
-    color: #616161;
-    font-size: 0.875rem;
-    font-weight: 600;
-    margin-bottom: 0.375rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-}
-.prob-bar-track {
-    background: #E0E0E0;
-    border-radius: 8px;
-    height: 28px;
-    overflow: hidden;
-    margin-bottom: 0.5rem;
-    position: relative;
-}
-.prob-bar-fill {
-    height: 100%;
-    border-radius: 8px;
-    transition: width 0.4s ease;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 0.75rem;
-    color: #FFFFFF;
-    font-weight: 700;
-    font-size: 0.9rem;
-    min-width: 3rem;
-}
-.prob-thresholds {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.75rem;
-    color: #616161;
-    margin-top: -0.25rem;
-}
-
-/* ─── Hero banner — clean, dark text on light bg ─── */
+/* ─── Hero ─── */
 .hero {
     background: #FAFAFA;
     border-left: 6px solid #E91E63;
@@ -343,37 +208,188 @@ h1, h2, h3, h4, h5, h6 {
 }
 .hero p strong { color: #212121 !important; }
 
-/* ─── Information panels (Clinical Guide page) ─── */
+/* ─── Feature cards (Home, How It Works, Intended Use) ─── */
+.feature-card {
+    background: #FAFAFA;
+    border: 1px solid #E0E0E0;
+    border-radius: 12px;
+    padding: 1.5rem 1.25rem;
+    height: 100%;
+    margin-bottom: 1rem;
+}
+.feature-card .feature-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+.feature-card h4 {
+    color: #212121 !important;
+    margin: 0 0 0.5rem 0 !important;
+}
+.feature-card p { color: #424242 !important; margin: 0; font-size: 0.95rem; }
+.feature-card ul {
+    color: #424242 !important;
+    margin: 0.5rem 0 0 0;
+    padding-left: 1.2rem;
+}
+.feature-card ul li { margin-bottom: 0.4rem; font-size: 0.95rem; }
+
+/* ─── Risk-tinted result cards (single source for low / moderate / high) ─── */
+.result-panel {
+    border-radius: 16px;
+    padding: 1.75rem 1.5rem;
+    margin: 1rem 0;
+    border-width: 2px;
+    border-style: solid;
+}
+.result-panel-low {
+    background: #E8F5E9;
+    border-color: #2E7D32;
+}
+.result-panel-moderate {
+    background: #FFF3E0;
+    border-color: #ED6C02;
+}
+.result-panel-high {
+    background: #FFEBEE;
+    border-color: #D32F2F;
+}
+.result-panel p, .result-panel li, .result-panel strong {
+    color: #212121 !important;
+}
+
+/* ─── Risk badges ─── */
+.risk-badge {
+    display: inline-block;
+    padding: 0.625rem 1.25rem;
+    border-radius: 24px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    margin-bottom: 1rem;
+    background: #FFFFFF;
+}
+.risk-badge-low      { color: #1B5E20; border: 2px solid #2E7D32; }
+.risk-badge-moderate { color: #B85A00; border: 2px solid #ED6C02; }
+.risk-badge-high     { color: #B71C1C; border: 2px solid #D32F2F; }
+
+/* ─── Probability bar ─── */
+.prob-label {
+    color: #424242;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.prob-bar-track {
+    background: #FFFFFF;
+    border: 1px solid #BDBDBD;
+    border-radius: 8px;
+    height: 28px;
+    overflow: hidden;
+    position: relative;
+}
+.prob-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.75rem;
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 0.9rem;
+    min-width: 3rem;
+}
+.prob-bar-fill-low      { background: #2E7D32; }
+.prob-bar-fill-moderate { background: #ED6C02; }
+.prob-bar-fill-high     { background: #D32F2F; }
+.prob-thresholds {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: #616161;
+    margin-top: 0.25rem;
+}
+
+/* ─── Recommendation block inside result ─── */
+.recommendation-block {
+    background: #FFFFFF;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-top: 1.25rem;
+    border: 1px solid #E0E0E0;
+}
+.recommendation-block h4 { margin: 0 0 0.5rem 0 !important; font-size: 1rem !important; }
+.recommendation-block p { margin: 0; line-height: 1.7; }
+
+/* ─── Info panels (Clinical Guide) ─── */
 .info-panel {
     border-radius: 12px;
     padding: 1.25rem;
-    border-left-width: 5px;
-    border-left-style: solid;
+    border-left: 5px solid;
     height: 100%;
+    margin-bottom: 1rem;
 }
-.info-panel h4 {
-    margin: 0 0 0.5rem 0 !important;
-    font-weight: 700 !important;
-}
+.info-panel h4 { margin: 0 0 0.5rem 0 !important; font-weight: 700 !important; }
 .info-panel p { margin: 0 !important; font-size: 0.95rem; }
-
-.info-panel-low {
-    background: #E8F5E9;
-    border-left-color: #2E7D32;
-}
-.info-panel-low h4, .info-panel-low p { color: #1B5E20 !important; }
-
-.info-panel-moderate {
-    background: #FFF3E0;
-    border-left-color: #ED6C02;
-}
+.info-panel-low      { background: #E8F5E9; border-left-color: #2E7D32; }
+.info-panel-low h4, .info-panel-low p           { color: #1B5E20 !important; }
+.info-panel-moderate { background: #FFF3E0; border-left-color: #ED6C02; }
 .info-panel-moderate h4, .info-panel-moderate p { color: #B85A00 !important; }
+.info-panel-high     { background: #FFEBEE; border-left-color: #D32F2F; }
+.info-panel-high h4, .info-panel-high p         { color: #B71C1C !important; }
 
-.info-panel-high {
-    background: #FFEBEE;
-    border-left-color: #D32F2F;
+/* ─── Best practices checklist ─── */
+.practice-item {
+    background: #FAFAFA;
+    border: 1px solid #E0E0E0;
+    border-left: 4px solid #E91E63;
+    border-radius: 8px;
+    padding: 0.875rem 1.25rem;
+    margin-bottom: 0.625rem;
+    color: #212121;
+    font-size: 0.95rem;
 }
-.info-panel-high h4, .info-panel-high p { color: #B71C1C !important; }
+
+/* ─── Developer profile card ─── */
+.dev-card {
+    background: #FAFAFA;
+    border: 1px solid #E0E0E0;
+    border-top: 4px solid #E91E63;
+    border-radius: 12px;
+    padding: 1.75rem 1.5rem;
+    max-width: 480px;
+    margin: 0 auto;
+    text-align: center;
+}
+.dev-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #E91E63;
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    font-size: 1.625rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.dev-card h3 { margin: 0 0 0.25rem 0 !important; }
+.dev-card .dev-role { color: #616161 !important; font-size: 0.95rem; margin: 0 0 0.75rem 0; }
+.dev-card .dev-email a { color: #E91E63; text-decoration: none; font-weight: 600; }
+.dev-card .dev-email a:hover { text-decoration: underline; }
+
+/* ─── Links ─── */
+a {
+    color: #E91E63 !important;
+    text-decoration: underline;
+    font-weight: 500;
+}
+a:hover { color: #C2185B !important; }
 
 /* ─── Section dividers ─── */
 hr {
@@ -382,19 +398,8 @@ hr {
     margin: 2rem 0 !important;
 }
 
-/* ─── Links ─── */
-a {
-    color: #E91E63 !important;
-    text-decoration: underline;
-    font-weight: 500;
-}
-a:hover {
-    color: #C2185B !important;
-}
-
 /* ─── Mobile responsiveness ─── */
 @media (max-width: 768px) {
-    .stApp { padding: 0 !important; }
     .hero { padding: 1.5rem 1rem; }
     .stApp h1 { font-size: 1.625rem !important; }
     .stApp h2 { font-size: 1.25rem !important; }
@@ -403,18 +408,16 @@ a:hover {
         padding: 0.875rem 1rem !important;
         font-size: 1rem;
     }
-    [data-testid="stExpander"] > div > div { padding: 0.875rem 1rem !important; }
-    .result-card { padding: 1.25rem; }
-    .risk-badge { font-size: 0.95rem; padding: 0.5rem 1rem; }
     [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; }
     [data-testid="stMetric"] { padding: 1rem; margin-bottom: 0.75rem; }
     [data-testid="stMetricValue"] { font-size: 1.25rem !important; }
-    .stButton > button[kind="primary"] { font-size: 0.95rem; padding: 0.75rem 1rem; }
+    .result-panel { padding: 1.25rem 1rem; }
+    .risk-badge { font-size: 0.95rem; padding: 0.5rem 1rem; }
+    .feature-card { padding: 1.25rem 1rem; }
+    .dev-card { padding: 1.5rem 1.25rem; }
 }
-
 @media (max-width: 480px) {
     .stApp h1 { font-size: 1.5rem !important; }
-    .hero { padding: 1.25rem 1rem; }
     .hero p { font-size: 0.95rem; }
 }
 </style>
@@ -422,60 +425,45 @@ a:hover {
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FILE PATHS
+# FILE PATHS  (relative to repo root)
 # ══════════════════════════════════════════════════════════════════════════════
 MODELS_DIR       = "models"
 REPORTS_DIR      = "reports"
 FIGURES_DIR      = os.path.join(REPORTS_DIR, "figures")
 SCALER_PATH      = os.path.join(MODELS_DIR, "scaler.joblib")
+MLP_PATH         = os.path.join(MODELS_DIR, "mlp_model.keras")
 COMPARISON_PATH  = os.path.join(REPORTS_DIR, "model_comparison.csv")
-ALL_METRICS_PATH = os.path.join(REPORTS_DIR, "all_metrics.json")
 CV_RESULTS_PATH  = os.path.join(REPORTS_DIR, "cv_results.json")
 THRESHOLDS_PATH  = os.path.join(REPORTS_DIR, "optimal_thresholds.json")
 
-SKLEARN_MODELS = {
-    "Logistic Regression": os.path.join(MODELS_DIR, "logistic_regression.joblib"),
-    "Decision Tree":       os.path.join(MODELS_DIR, "decision_tree.joblib"),
-    "Random Forest":       os.path.join(MODELS_DIR, "random_forest.joblib"),
-}
-MLP_PATH = os.path.join(MODELS_DIR, "mlp_model.keras")
-
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FEATURE PIPELINE  (verified from scaler.feature_names_in_ and model.feature_names_in_)
+# FEATURE PIPELINE  (verified against scaler.feature_names_in_ and model.feature_names_in_)
 # ══════════════════════════════════════════════════════════════════════════════
-
-# These 10 features are scaled — order matches scaler.feature_names_in_ exactly
 SCALED_FEATURES = [
     "maternal_age", "parity", "antenatal_visits", "socioeconomic_status",
     "systolic_bp", "diastolic_bp", "hemoglobin", "bmi",
     "fasting_blood_glucose", "weight_gain",
 ]
-
-# These 4 binary features are appended after scaling (unscaled)
 BINARY_FEATURES = [
     "history_hypertension", "gestational_diabetes",
     "previous_cesarean", "previous_preeclampsia",
 ]
-
-# Facility type is one-hot encoded into 3 columns
 FACILITY_OHE_COLUMNS = [
     "facility_primary_health_centre",
     "facility_private_clinic",
     "facility_tertiary_hospital",
 ]
+# Facility field has been removed from the UI per requirements.
+# We default to Primary Health Centre — the dominant deployment context.
+DEFAULT_FACILITY_COLUMN = "facility_primary_health_centre"
 
-# Maps the user's facility choice to its one-hot column
-FACILITY_OPTIONS = {
-    "Primary Health Centre":  "facility_primary_health_centre",
-    "Private Clinic":         "facility_private_clinic",
-    "Tertiary Hospital":      "facility_tertiary_hospital",
-}
-
-# Final column order seen by the model (17 columns total)
 FINAL_FEATURE_ORDER = SCALED_FEATURES + BINARY_FEATURES + FACILITY_OHE_COLUMNS
-
 SES_OPTIONS = {"Low": 0, "Middle": 1, "High": 2}
+
+# Risk bands (single source of truth — drive every displayed output)
+LOW_BAND_UPPER       = 0.40   # below this → Low Risk
+MODERATE_BAND_UPPER  = 0.65   # below this → Moderate, at/above → High
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -490,26 +478,40 @@ def load_scaler():
     return joblib.load(SCALER_PATH)
 
 
-@st.cache_resource(show_spinner=False)
-def load_sklearn_model(path: str):
-    import joblib
-    if not os.path.exists(path):
-        st.error(f"Model file not found: {path}")
-        st.stop()
-    return joblib.load(path)
-
-
-@st.cache_resource(show_spinner=False)
-def load_keras_model(path: str):
+@st.cache_resource(show_spinner="Loading MLP model…")
+def load_mlp():
+    """
+    Load the MLP (.keras) model.
+    Requires TensorFlow ≥ 2.16 (Keras 3) — the model was saved with Keras 3
+    serialization which uses `batch_shape` and `optional` InputLayer kwargs.
+    """
     try:
         from tensorflow import keras
-    except ImportError:
-        st.error("TensorFlow not installed — MLP unavailable.")
+    except ImportError as e:
+        st.error(
+            "TensorFlow could not be imported. "
+            "Check that `tensorflow-cpu==2.17.0` is in requirements.txt."
+        )
         st.stop()
-    if not os.path.exists(path):
-        st.error(f"MLP model file not found: {path}")
+
+    if not os.path.exists(MLP_PATH):
+        st.error(f"MLP model file not found at '{MLP_PATH}'.")
         st.stop()
-    return keras.models.load_model(path)
+
+    try:
+        # compile=False skips re-creating optimizer state — faster and avoids
+        # version-specific optimizer config issues for inference-only use.
+        model = keras.models.load_model(MLP_PATH, compile=False)
+        return model
+    except Exception as e:
+        st.error(
+            "Could not load MLP model.\n\n"
+            f"**Details:** {e}\n\n"
+            "If the error mentions `batch_shape` or `Unrecognized keyword`, "
+            "the runtime is using Keras 2. Upgrade to "
+            "`tensorflow-cpu==2.17.0` (ships with Keras 3) in requirements.txt."
+        )
+        st.stop()
 
 
 @st.cache_data(show_spinner=False)
@@ -523,154 +525,137 @@ def load_json_file(path: str) -> dict:
         return json.load(f)
 
 
+@st.cache_data(show_spinner=False)
+def get_validated_threshold() -> float:
+    """Load the MLP's F1-optimal threshold from training (used internally)."""
+    if os.path.exists(THRESHOLDS_PATH):
+        try:
+            data = load_json_file(THRESHOLDS_PATH)
+            return float(data.get("MLP", 0.5))
+        except Exception:
+            return 0.5
+    return 0.5
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-# PREPROCESSING — the critical fix
+# PREPROCESSING  (mirrors training pipeline exactly)
 # ══════════════════════════════════════════════════════════════════════════════
 def build_feature_dataframe(user_inputs: dict) -> pd.DataFrame:
     """
-    Construct the 17-column feature DataFrame in the exact order the model
-    expects. This is THE function that must mirror preprocess.py exactly.
-
-    Steps:
-      1. Take the 10 scaled-feature values, scale with StandardScaler
-      2. Take the 4 binary features as-is (0/1)
-      3. One-hot encode facility_type into 3 columns
-      4. Concatenate in the order: [scaled] + [binary] + [facility_ohe]
+    Build the 17-column feature DataFrame matching the model's training-time
+    column order. Facility type defaults to Primary Health Centre (the dominant
+    deployment context); this field is no longer collected from the UI.
     """
     scaler = load_scaler()
 
-    # ─── Step 1: Build the 10 scaled features in correct order ───
+    # 1. Scale the 10 continuous + ordinal features
     scaled_row = pd.DataFrame(
         [[user_inputs[f] for f in SCALED_FEATURES]],
         columns=SCALED_FEATURES,
     )
-
-    # Apply scaler — n_features_in_ must equal 10
     if scaler.n_features_in_ != len(SCALED_FEATURES):
         raise ValueError(
-            f"Scaler expects {scaler.n_features_in_} features but app is "
-            f"passing {len(SCALED_FEATURES)}. Check feature order."
+            f"Scaler expects {scaler.n_features_in_} features but received "
+            f"{len(SCALED_FEATURES)}. Re-train or update the pipeline."
         )
-    scaled_values = scaler.transform(scaled_row)
-    scaled_df = pd.DataFrame(scaled_values, columns=SCALED_FEATURES)
+    scaled_df = pd.DataFrame(
+        scaler.transform(scaled_row),
+        columns=SCALED_FEATURES,
+    )
 
-    # ─── Step 2: Binary features (unscaled) ───
+    # 2. Binary features (unscaled)
     binary_df = pd.DataFrame(
         [[int(user_inputs[f]) for f in BINARY_FEATURES]],
         columns=BINARY_FEATURES,
     )
 
-    # ─── Step 3: One-hot encode facility_type ───
-    chosen_facility_col = FACILITY_OPTIONS[user_inputs["facility_type"]]
+    # 3. Facility one-hot — defaulted to Primary Health Centre
     facility_dict = {col: 0 for col in FACILITY_OHE_COLUMNS}
-    facility_dict[chosen_facility_col] = 1
+    facility_dict[DEFAULT_FACILITY_COLUMN] = 1
     facility_df = pd.DataFrame([facility_dict])[FACILITY_OHE_COLUMNS]
 
-    # ─── Step 4: Concatenate and enforce final column order ───
+    # 4. Final 17-column row
     final_df = pd.concat([scaled_df, binary_df, facility_df], axis=1)
-    final_df = final_df[FINAL_FEATURE_ORDER]  # explicit reordering safety
-    return final_df
+    return final_df[FINAL_FEATURE_ORDER]
+
+
+def predict_with_mlp(user_inputs: dict) -> float:
+    """
+    Single inference entry point.
+    Returns one probability (float) — every downstream display derives from it.
+    """
+    X = build_feature_dataframe(user_inputs)
+    model = load_mlp()
+    # Cast to float32 for the Keras input layer
+    X_np = X.values.astype(np.float32)
+    raw = model.predict(X_np, verbose=0)
+    # Handle (1,1) or (1,) output shapes robustly
+    prob = float(raw.ravel()[0])
+    # Clamp to [0,1] for numerical safety
+    return max(0.0, min(1.0, prob))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# VISUAL HELPERS
+# ASSESSMENT  (SINGLE source of truth — all displayed outputs derive here)
 # ══════════════════════════════════════════════════════════════════════════════
-def risk_colour(prob: float):
-    if prob < 0.40:
-        return "#2E7D32", "Low Risk", "🟢"
-    elif prob < 0.65:
-        return "#ED6C02", "Moderate Risk", "🟡"
+def compute_assessment(prob: float) -> dict:
+    """
+    Map a single probability to a single tier, badge, colour, and recommendation.
+    All downstream UI elements use this dictionary — guaranteeing consistency
+    between badge, probability, recommendation, and clinical interpretation.
+    """
+    if prob < LOW_BAND_UPPER:
+        return {
+            "tier":          "low",
+            "label":         "LOW RISK",
+            "icon":          "🟢",
+            "badge_class":   "risk-badge-low",
+            "panel_class":   "result-panel-low",
+            "bar_class":     "prob-bar-fill-low",
+            "colour":        "#2E7D32",
+            "interpretation":
+                "Based on the inputs provided, this profile does not currently "
+                "indicate elevated maternal risk.",
+            "recommendation":
+                "Continue routine antenatal care according to national maternal "
+                "health guidelines. Re-assess risk at every subsequent visit and "
+                "watch for any new clinical signs.",
+        }
+    elif prob < MODERATE_BAND_UPPER:
+        return {
+            "tier":          "moderate",
+            "label":         "MODERATE RISK",
+            "icon":          "🟡",
+            "badge_class":   "risk-badge-moderate",
+            "panel_class":   "result-panel-moderate",
+            "bar_class":     "prob-bar-fill-moderate",
+            "colour":        "#ED6C02",
+            "interpretation":
+                "This profile shows some risk indicators that warrant closer "
+                "attention than routine care alone.",
+            "recommendation":
+                "Schedule more frequent antenatal visits, perform targeted "
+                "follow-up investigations where indicated, and consider "
+                "consultation with a specialist if any single risk factor is "
+                "severe or worsening.",
+        }
     else:
-        return "#D32F2F", "High Risk", "🔴"
-
-
-def gauge_svg(prob: float) -> str:
-    angle  = prob * 180
-    rad    = np.radians(180 - angle)
-    cx, cy, r = 130, 120, 95
-    nx = cx + r * np.cos(rad)
-    ny = cy - r * np.sin(rad)
-    colour, label, _ = risk_colour(prob)
-    return f"""
-<svg viewBox="0 0 260 155" xmlns="http://www.w3.org/2000/svg"
-     style="width:100%;max-width:340px;display:block;margin:auto"
-     role="img" aria-label="Risk probability gauge showing {prob*100:.0f} percent">
-  <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%"  stop-color="#2E7D32"/>
-      <stop offset="50%" stop-color="#ED6C02"/>
-      <stop offset="100%" stop-color="#D32F2F"/>
-    </linearGradient>
-  </defs>
-  <path d="M 35 120 A 95 95 0 0 1 225 120"
-        fill="none" stroke="url(#bgGrad)" stroke-width="22"
-        stroke-linecap="round" opacity="0.20"/>
-  <path d="M 35 120 A 95 95 0 0 1 {nx:.2f} {ny:.2f}"
-        fill="none" stroke="{colour}" stroke-width="22" stroke-linecap="round"/>
-  <circle cx="{nx:.2f}" cy="{ny:.2f}" r="13" fill="{colour}"
-          stroke="#FFFFFF" stroke-width="3"/>
-  <text x="130" y="105" text-anchor="middle" font-size="34"
-        font-weight="bold" fill="#212121" font-family="-apple-system, Segoe UI, sans-serif">
-    {prob*100:.0f}%
-  </text>
-  <text x="130" y="135" text-anchor="middle" font-size="14"
-        fill="{colour}" font-family="-apple-system, Segoe UI, sans-serif" font-weight="700">
-    {label}
-  </text>
-  <text x="35"  y="148" font-size="11" fill="#616161" font-family="-apple-system, Segoe UI, sans-serif">Low</text>
-  <text x="200" y="148" font-size="11" fill="#616161" font-family="-apple-system, Segoe UI, sans-serif">High</text>
-</svg>"""
-
-
-def feature_bar_chart(user_inputs: dict) -> plt.Figure:
-    """Normalised view of continuous inputs against typical clinical ranges."""
-    clinical_ranges = {
-        "maternal_age":          (15, 45, "years",   "Maternal age"),
-        "systolic_bp":           (90, 160, "mmHg",   "Systolic BP"),
-        "diastolic_bp":          (60, 110, "mmHg",   "Diastolic BP"),
-        "hemoglobin":            (7,  16,  "g/dL",   "Haemoglobin"),
-        "bmi":                   (16, 45,  "kg/m²",  "BMI"),
-        "fasting_blood_glucose": (3,  15,  "mmol/L", "Fasting glucose"),
-        "weight_gain":           (4,  25,  "kg",     "Weight gain"),
-        "parity":                (0,  8,   "",       "Parity"),
-        "antenatal_visits":      (0,  12,  "visits", "ANC visits"),
-    }
-
-    labels, normed, colours = [], [], []
-    for key, (lo, hi, unit, label) in clinical_ranges.items():
-        val = float(user_inputs[key])
-        n   = max(0.0, min(1.0, (val - lo) / (hi - lo)))
-        labels.append(label)
-        normed.append(n)
-        if n < 0.35:
-            colours.append("#2E7D32")  # success green
-        elif n < 0.70:
-            colours.append("#E91E63")  # primary pink accent
-        else:
-            colours.append("#D32F2F")  # danger red
-    
-    fig, ax = plt.subplots(figsize=(8, 4.2))
-    fig.patch.set_facecolor("#FAFAFA")
-    ax.set_facecolor("#FAFAFA")
-
-    bars = ax.barh(labels, normed, color=colours, height=0.6, edgecolor="white", linewidth=1.5)
-    ax.axvline(0.35, color="#ED6C02", linestyle="--", linewidth=0.8, alpha=0.6)
-    ax.axvline(0.70, color="#D32F2F", linestyle="--", linewidth=0.8, alpha=0.6)
-    ax.set_xlim(0, 1.05)
-    ax.set_xlabel("Position within typical clinical range", color="#212121", fontsize=10)
-    ax.set_title("Patient input summary", fontsize=13, fontweight="bold", color="#212121", pad=12)
-    ax.tick_params(colors="#212121")
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.spines[["bottom", "left"]].set_color("#616161")
-    ax.grid(axis="x", alpha=0.15, color="#616161")
-
-    low_p  = mpatches.Patch(color="#2E7D32", label="Low range")
-    mid_p  = mpatches.Patch(color="#E91E63", label="Typical range")
-    high_p = mpatches.Patch(color="#D32F2F", label="High range")
-    ax.legend(handles=[low_p, mid_p, high_p], loc="lower right",
-              fontsize=9, frameon=False)
-    fig.tight_layout()
-    return fig
+        return {
+            "tier":          "high",
+            "label":         "HIGH RISK",
+            "icon":          "🔴",
+            "badge_class":   "risk-badge-high",
+            "panel_class":   "result-panel-high",
+            "bar_class":     "prob-bar-fill-high",
+            "colour":        "#D32F2F",
+            "interpretation":
+                "This profile is associated with substantially elevated maternal "
+                "risk and should be acted upon promptly.",
+            "recommendation":
+                "Refer to a higher-level facility for comprehensive obstetric "
+                "review. Initiate close monitoring in the interim and follow "
+                "national maternal referral protocols.",
+        }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -685,23 +670,22 @@ with st.sidebar:
         [
             "🏠  Home",
             "👩‍⚕️  New Assessment",
-            "📊  Model Performance",
             "📖  Clinical Guide",
             "ℹ️  About",
         ],
         label_visibility="collapsed",
     )
     st.markdown("---")
-    st.markdown("##### 💡 Quick Reference")
-    st.markdown("""
-- **Low risk:** <40%  
-- **Moderate risk:** 40–65%  
-- **High risk:** >65%  
-""")
+    st.markdown("##### 💡 Risk bands")
+    st.markdown(
+        "- 🟢 **Low** — below 40%\n"
+        "- 🟡 **Moderate** — 40 to 65%\n"
+        "- 🔴 **High** — above 65%"
+    )
     st.markdown("---")
     st.caption(
         "Predictive ML tool trained on synthetic Nigerian maternal health "
-        "data. For academic and clinical decision-support use only."
+        "data. For research and clinical decision-support use only."
     )
 
 
@@ -712,56 +696,89 @@ if page.strip().startswith("🏠"):
     st.markdown("""
 <div class="hero">
   <h1>🌸 MaternaCare</h1>
-  <p><strong>High-Risk Pregnancy Prediction</strong> · A clinical decision-support
+  <p><strong>High-Risk Pregnancy Screening</strong> · A clinical decision-support
   tool for midwives, nurses, and obstetricians</p>
 </div>
 """, unsafe_allow_html=True)
 
+    # ─── Welcome ───────────────────────────────────────────────────────────
+    st.markdown("### Welcome 👋")
     st.markdown("""
-### Welcome 👋
-
-**MaternaCare** uses machine learning to help frontline maternal health workers
-in Nigerian primary health centres, private clinics, and tertiary hospitals
-quickly identify pregnant women whose clinical profile suggests **elevated
-maternal risk** — supporting timely referral, closer monitoring, and informed
-counselling.
+**MaternaCare** helps frontline maternal health workers in Nigerian primary
+health centres, private clinics, and tertiary hospitals quickly identify
+pregnant women whose clinical profile suggests **elevated maternal risk** —
+supporting timely referral, closer monitoring, and informed counselling.
 
 > ⚠️ **This tool supports clinical judgement; it does not replace it.**
 > Always combine model output with full clinical history, examination,
 > and your professional expertise.
 """)
 
+    # ─── How it works ─────────────────────────────────────────────────────
     st.markdown("### How it works")
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""
-**1️⃣ Enter patient data**
-
-Fill in the patient's vitals, obstetric history, and demographics.
-Takes about 60 seconds.
-""")
+<div class='feature-card'>
+<span class='feature-icon'>📝</span>
+<h4>1. Enter patient data</h4>
+<p>Fill in the patient's vitals, obstetric history, and demographics. Takes about 60 seconds.</p>
+</div>
+""", unsafe_allow_html=True)
     with c2:
         st.markdown("""
-**2️⃣ Get a risk score**
-
-The model returns a probability of high-risk pregnancy along with
-a clear Low / Moderate / High classification.
-""")
+<div class='feature-card'>
+<span class='feature-icon'>📊</span>
+<h4>2. Get a risk score</h4>
+<p>The model returns a probability of high-risk pregnancy along with a clear Low, Moderate, or High classification.</p>
+</div>
+""", unsafe_allow_html=True)
     with c3:
         st.markdown("""
-**3️⃣ Make informed decisions**
-
-Use the score as additional input for referral, monitoring frequency,
-or specialist consultation.
-""")
+<div class='feature-card'>
+<span class='feature-icon'>🩺</span>
+<h4>3. Make informed decisions</h4>
+<p>Use the score as additional input for referral, monitoring frequency, or specialist consultation.</p>
+</div>
+""", unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### Model performance at a glance")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.metric("Training records",  "5,000")
-    with c2: st.metric("Best F1 score",     "0.78",  "MLP")
-    with c3: st.metric("Best AUC-ROC",      "0.93",  "Logistic")
-    with c4: st.metric("Models available",  "4")
+
+    # ─── Intended use ─────────────────────────────────────────────────────
+    st.markdown("### Intended use")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("""
+<div class='feature-card'>
+<span class='feature-icon'>🎯</span>
+<h4>Primary use</h4>
+<p>Decision-support tool for antenatal risk screening at Primary Health Centres (PHCs) and General Hospitals in Nigeria. Designed to identify pregnancies that may require closer monitoring or referral to higher-level facilities.</p>
+</div>
+""", unsafe_allow_html=True)
+    with c2:
+        st.markdown("""
+<div class='feature-card'>
+<span class='feature-icon'>👥</span>
+<h4>Intended users</h4>
+<ul>
+<li>Midwives and nurses conducting routine antenatal assessments at PHCs.</li>
+<li>Obstetricians working in secondary and tertiary hospitals for patient triage.</li>
+<li>Researchers studying machine learning applications for maternal health in low-resource settings.</li>
+</ul>
+</div>
+""", unsafe_allow_html=True)
+    with c3:
+        st.markdown("""
+<div class='feature-card'>
+<span class='feature-icon'>🚫</span>
+<h4>Out-of-scope uses</h4>
+<ul>
+<li>Not intended for autonomous clinical decision-making.</li>
+<li>The model is a screening aid, not a diagnostic tool.</li>
+<li>The model is designed around Nigerian maternal health characteristics and should not be assumed to generalize to other populations without validation.</li>
+</ul>
+</div>
+""", unsafe_allow_html=True)
 
     st.markdown("---")
     st.info(
@@ -781,47 +798,11 @@ elif page.strip().startswith("👩‍⚕️"):
         "accurate prediction. Click **Run Assessment** when ready."
     )
 
-    # ─── Model + threshold (compact, in expander to reduce clutter) ─────────
-    with st.expander("⚙️  Advanced settings", expanded=False):
-        available_models = dict(SKLEARN_MODELS)
-        if os.path.exists(MLP_PATH):
-            available_models["MLP Neural Network"] = MLP_PATH
-
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            selected_model_name = st.selectbox(
-                "Prediction model",
-                list(available_models.keys()),
-                index=0,
-                help="Logistic Regression is the most interpretable. "
-                     "MLP gives the highest F1 score.",
-            )
-        with c2:
-            default_thresh = 0.5
-            if os.path.exists(THRESHOLDS_PATH):
-                try:
-                    saved = load_json_file(THRESHOLDS_PATH)
-                    key_map = {
-                        "Logistic Regression": "Logistic Regression",
-                        "Decision Tree":       "Decision Tree",
-                        "Random Forest":       "Random Forest",
-                        "MLP Neural Network":  "MLP",
-                    }
-                    default_thresh = float(saved.get(key_map.get(selected_model_name, ""), 0.5))
-                except Exception:
-                    pass
-            threshold = st.number_input(
-                "Decision threshold",
-                min_value=0.01, max_value=0.99,
-                value=round(default_thresh, 3), step=0.01,
-                help="Lower threshold = more sensitive (more positives, fewer missed).",
-            )
-
     user_inputs = {}
 
-    # ═══ SECTION 1: Demographics ════════════════════════════════════════════
+    # ═══ Demographics ═══════════════════════════════════════════════════════
     with st.expander("👤  Demographics & socioeconomic context", expanded=True):
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
             user_inputs["maternal_age"] = st.number_input(
                 "Maternal age (years)",
@@ -837,15 +818,8 @@ elif page.strip().startswith("👩‍⚕️"):
                     help="Based on household income, education, occupation.",
                 )
             ]
-        with c3:
-            user_inputs["facility_type"] = st.selectbox(
-                "Care facility",
-                list(FACILITY_OPTIONS.keys()),
-                index=0,
-                help="Type of facility providing antenatal care.",
-            )
 
-    # ═══ SECTION 2: Obstetric history ═══════════════════════════════════════
+    # ═══ Obstetric history ══════════════════════════════════════════════════
     with st.expander("🤱  Obstetric history", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -867,7 +841,7 @@ elif page.strip().startswith("👩‍⚕️"):
                 help="IOM target ~11.5–16 kg for normal BMI.",
             )
 
-    # ═══ SECTION 3: Vital signs and laboratory ══════════════════════════════
+    # ═══ Vital signs & laboratory ═══════════════════════════════════════════
     with st.expander("🩺  Vital signs & laboratory", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -899,7 +873,7 @@ elif page.strip().startswith("👩‍⚕️"):
                 help="<11 indicates anaemia in pregnancy.",
             )
 
-    # ═══ SECTION 4: Medical history (binary risk factors) ═══════════════════
+    # ═══ Medical history ════════════════════════════════════════════════════
     with st.expander("🏥  Risk factors & medical history", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
@@ -918,7 +892,7 @@ elif page.strip().startswith("👩‍⚕️"):
                 "⚠️ Previous pre-eclampsia",
             ))
 
-    # ─── Real-time validation hints ─────────────────────────────────────────
+    # ─── Real-time clinical hints (not gating) ──────────────────────────────
     hints = []
     if user_inputs.get("systolic_bp", 0) <= user_inputs.get("diastolic_bp", 0):
         hints.append(("error", "Systolic BP must be greater than Diastolic BP."))
@@ -934,199 +908,87 @@ elif page.strip().startswith("👩‍⚕️"):
     for level, msg in hints:
         getattr(st, level)(msg)
 
-    st.markdown("")  # spacer
+    st.markdown("")
 
-    # ─── Run prediction ─────────────────────────────────────────────────────
     block_predict = any(level == "error" for level, _ in hints)
+
     if st.button(
         "▶  Run Assessment",
         type="primary",
         use_container_width=True,
         disabled=block_predict,
     ):
-
-        # Build the 17-feature DataFrame
+        # ─── Single prediction call ─────────────────────────────────────────
         try:
-            X = build_feature_dataframe(user_inputs)
-        except Exception as e:
-            st.error(f"**Could not build features:** {e}")
-            st.stop()
-
-        # Run the model
-        try:
-            model_path = available_models[selected_model_name]
-            if selected_model_name == "MLP Neural Network":
-                model = load_keras_model(model_path)
-                prob  = float(model.predict(X.values, verbose=0)[0, 0])
-            else:
-                model = load_sklearn_model(model_path)
-                prob  = float(model.predict_proba(X)[0, 1])
-            label = int(prob >= threshold)
+            prob = predict_with_mlp(user_inputs)
         except Exception as e:
             st.error(f"**Prediction failed:** {e}")
             st.stop()
 
-        # ─── Display results ───
+        # ─── Derive every output from the same probability ──────────────────
+        a = compute_assessment(prob)
+        prob_pct = prob * 100
+
         st.markdown("---")
         st.markdown("## 📋 Assessment result")
 
-        colour, risk_text, emoji = risk_colour(prob)
+        # ─── Risk-tinted result panel ───────────────────────────────────────
+        st.markdown(
+            f"""
+<div class='result-panel {a['panel_class']}'>
+  <div class='risk-badge {a['badge_class']}'>{a['icon']}  {a['label']}</div>
 
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            st.markdown(gauge_svg(prob), unsafe_allow_html=True)
+  <div class='prob-label'>Risk probability</div>
+  <div class='prob-bar-track'>
+    <div class='prob-bar-fill {a['bar_class']}' style='width:{max(prob_pct, 8):.1f}%'>
+      {prob_pct:.1f}%
+    </div>
+  </div>
+  <div class='prob-thresholds'>
+    <span>0%</span>
+    <span>40% — Moderate</span>
+    <span>65% — High</span>
+    <span>100%</span>
+  </div>
 
-        with c2:
-            verdict = "🔴  HIGH RISK" if label == 1 else "🟢  LOW RISK"
-            badge_class = "risk-badge-high" if label == 1 else "risk-badge-low"
-            st.markdown(
-                f"<div class='result-card'>"
-                f"<div class='risk-badge {badge_class}'>{verdict}</div>"
-                f"<div class='prob-label'>Risk probability</div>"
-                f"<div class='prob-bar-track'>"
-                f"<div class='prob-bar-fill' style='width:{max(prob*100, 8):.1f}%;background:{colour};'>"
-                f"{prob*100:.1f}%"
-                f"</div></div>"
-                f"<div class='prob-thresholds'>"
-                f"<span>0%</span><span>Low ↔ Moderate (40%)</span>"
-                f"<span>Moderate ↔ High (65%)</span><span>100%</span>"
-                f"</div>"
-                f"<p style='font-size:1rem;margin-top:1.25rem;line-height:1.8'>"
-                f"<strong>Risk category:</strong> {emoji} {risk_text}<br>"
-                f"<strong>Model:</strong> {selected_model_name}<br>"
-                f"<strong>Threshold:</strong> {threshold}"
-                f"</p></div>",
-                unsafe_allow_html=True,
-            )
+  <div class='recommendation-block'>
+    <h4>🩺 Clinical interpretation</h4>
+    <p>{a['interpretation']}</p>
+  </div>
 
-            if label == 1:
-                st.warning(
-                    "**Clinical action suggested:** Patient profile shows elevated "
-                    "risk indicators. Consider closer monitoring, referral to a "
-                    "higher-level facility, and a comprehensive obstetric review.",
-                    icon="🚨",
-                )
-            else:
-                st.success(
-                    "**Routine follow-up appropriate:** No elevated risk detected "
-                    "based on current inputs. Continue standard antenatal care "
-                    "and re-assess at each visit.",
-                    icon="✅",
-                )
-
-        # ─── Feature summary chart ───
-        st.markdown("### 📊 Patient profile snapshot")
-        fig = feature_bar_chart(user_inputs)
-        st.pyplot(fig, use_container_width=True)
-        plt.close(fig)
-
-        # ─── Detailed input summary ───
-        with st.expander("📑  Full input summary"):
-            rows = []
-            inv_ses = {v: k for k, v in SES_OPTIONS.items()}
-            display_map = {
-                "maternal_age":          ("Maternal age",         f"{user_inputs['maternal_age']} years"),
-                "parity":                ("Parity",               f"{user_inputs['parity']} prior"),
-                "antenatal_visits":      ("ANC visits",           f"{user_inputs['antenatal_visits']}"),
-                "socioeconomic_status":  ("Socioeconomic status", inv_ses[user_inputs["socioeconomic_status"]]),
-                "systolic_bp":           ("Systolic BP",          f"{user_inputs['systolic_bp']} mmHg"),
-                "diastolic_bp":          ("Diastolic BP",         f"{user_inputs['diastolic_bp']} mmHg"),
-                "hemoglobin":            ("Haemoglobin",          f"{user_inputs['hemoglobin']} g/dL"),
-                "bmi":                   ("BMI",                  f"{user_inputs['bmi']} kg/m²"),
-                "fasting_blood_glucose": ("Fasting glucose",      f"{user_inputs['fasting_blood_glucose']} mmol/L"),
-                "weight_gain":           ("Weight gain",          f"{user_inputs['weight_gain']} kg"),
-                "facility_type":         ("Care facility",        user_inputs["facility_type"]),
-                "history_hypertension":  ("Hypertension hx",      "Yes" if user_inputs["history_hypertension"] else "No"),
-                "gestational_diabetes":  ("Gestational diabetes", "Yes" if user_inputs["gestational_diabetes"] else "No"),
-                "previous_cesarean":     ("Previous CS",          "Yes" if user_inputs["previous_cesarean"] else "No"),
-                "previous_preeclampsia": ("Previous pre-eclampsia","Yes" if user_inputs["previous_preeclampsia"] else "No"),
-            }
-            for _, (label, val) in display_map.items():
-                rows.append({"Field": label, "Value": val})
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE: MODEL PERFORMANCE
-# ══════════════════════════════════════════════════════════════════════════════
-elif page.strip().startswith("📊"):
-    st.markdown("# 📊 Model Performance")
-    st.markdown("How well do the underlying models perform on held-out test data?")
-
-    if os.path.exists(COMPARISON_PATH):
-        st.markdown("### Test-set results (n = 750)")
-        df = load_comparison()
-        metric_cols = [c for c in df.columns
-                       if c in ["accuracy", "precision", "recall", "f1_score", "roc_auc"]]
-        styled = (df[metric_cols].style
-                  .highlight_max(axis=0, props="background-color:#FCE4EC;font-weight:bold;color:#212121")
-                  .format("{:.4f}"))
-        st.dataframe(styled, use_container_width=True)
-
-        st.markdown("### Metric comparison")
-        metric_choice = st.selectbox(
-            "Choose metric",
-            metric_cols,
-            index=metric_cols.index("f1_score") if "f1_score" in metric_cols else 0,
+  <div class='recommendation-block'>
+    <h4>✅ Recommended action</h4>
+    <p>{a['recommendation']}</p>
+  </div>
+</div>
+""",
+            unsafe_allow_html=True,
         )
-        fig, ax = plt.subplots(figsize=(8, 3.5))
-        fig.patch.set_facecolor("#FAFAFA")
-        ax.set_facecolor("#FAFAFA")
-        palette = ["#E91E63", "#AD1457", "#F06292", "#F8BBD0"]
-        bars = ax.barh(df.index, df[metric_choice], color=palette[:len(df)], height=0.55)
-        ax.bar_label(bars, fmt="%.3f", padding=4, fontsize=10, color="#212121")
-        ax.set_xlim(0, 1.1)
-        ax.set_xlabel(metric_choice.replace("_", " ").title(), color="#212121")
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.spines[["bottom", "left"]].set_color("#616161")
-        ax.tick_params(colors="#212121")
-        ax.grid(axis="x", alpha=0.15, color="#616161")
-        st.pyplot(fig, use_container_width=True)
-        plt.close(fig)
-    else:
-        st.info("Run `python run_pipeline.py` to generate performance reports.")
 
-    if os.path.exists(CV_RESULTS_PATH):
-        st.markdown("---")
-        st.markdown("### Cross-validation (5-fold stratified)")
-        cv = load_json_file(CV_RESULTS_PATH)
-        cv_rows = []
-        for model_name, metrics in cv.items():
-            row = {"Model": model_name}
-            for metric, vals in metrics.items():
-                row[metric.replace("_", " ").title()] = f"{vals['mean']:.4f} ± {vals['std']:.4f}"
-            cv_rows.append(row)
-        st.dataframe(pd.DataFrame(cv_rows).set_index("Model"), use_container_width=True)
-
-    if os.path.exists(FIGURES_DIR):
-        st.markdown("---")
-        st.markdown("### Report figures")
-        figure_catalog = {
-            "ROC curve comparison":             "roc_comparison.png",
-            "Feature importance comparison":    "feature_importance_comparison.png",
-            "MLP training history":             "mlp_training_history.png",
-            "Confusion matrix — Logistic Regression": "cm_logistic_regression.png",
-            "Confusion matrix — Decision Tree": "cm_decision_tree.png",
-            "Confusion matrix — Random Forest": "cm_random_forest.png",
-            "Confusion matrix — MLP":           "cm_mlp.png",
-        }
-        available_figs = {
-            t: f for t, f in figure_catalog.items()
-            if os.path.exists(os.path.join(FIGURES_DIR, f))
-        }
-        if available_figs:
-            titles = list(available_figs.keys())
-            for i in range(0, len(titles), 2):
-                cols = st.columns(2)
-                for j, col in enumerate(cols):
-                    if i + j < len(titles):
-                        title = titles[i + j]
-                        with col:
-                            st.markdown(f"**{title}**")
-                            st.image(
-                                os.path.join(FIGURES_DIR, available_figs[title]),
-                                use_container_width=True,
-                            )
+        # ─── Patient input summary (collapsed by default) ───────────────────
+        with st.expander("📑  Full patient input summary"):
+            inv_ses = {v: k for k, v in SES_OPTIONS.items()}
+            display_rows = [
+                ("Maternal age",            f"{user_inputs['maternal_age']} years"),
+                ("Parity",                  f"{user_inputs['parity']} prior"),
+                ("ANC visits",              f"{user_inputs['antenatal_visits']}"),
+                ("Socioeconomic status",    inv_ses[user_inputs["socioeconomic_status"]]),
+                ("Systolic BP",             f"{user_inputs['systolic_bp']} mmHg"),
+                ("Diastolic BP",            f"{user_inputs['diastolic_bp']} mmHg"),
+                ("Haemoglobin",             f"{user_inputs['hemoglobin']} g/dL"),
+                ("BMI",                     f"{user_inputs['bmi']} kg/m²"),
+                ("Fasting glucose",         f"{user_inputs['fasting_blood_glucose']} mmol/L"),
+                ("Weight gain",             f"{user_inputs['weight_gain']} kg"),
+                ("History of hypertension", "Yes" if user_inputs["history_hypertension"] else "No"),
+                ("Gestational diabetes",    "Yes" if user_inputs["gestational_diabetes"] else "No"),
+                ("Previous caesarean",      "Yes" if user_inputs["previous_cesarean"] else "No"),
+                ("Previous pre-eclampsia",  "Yes" if user_inputs["previous_preeclampsia"] else "No"),
+            ]
+            st.dataframe(
+                pd.DataFrame(display_rows, columns=["Field", "Value"]),
+                use_container_width=True,
+                hide_index=True,
+            )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1135,10 +997,11 @@ elif page.strip().startswith("📊"):
 elif page.strip().startswith("📖"):
     st.markdown("# 📖 Clinical Guide")
     st.markdown(
-        "A quick reference for interpreting MaternaCare results and the risk "
-        "factors considered by the model."
+        "A quick reference for interpreting MaternaCare results and using the "
+        "tool safely in routine antenatal practice."
     )
 
+    # ─── Risk categories ───────────────────────────────────────────────────
     st.markdown("### Risk categories")
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -1164,18 +1027,76 @@ elif page.strip().startswith("📖"):
 """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### Risk factors used by the model")
+
+    # ─── When to refer ─────────────────────────────────────────────────────
+    st.markdown("### When to refer to a higher-level facility")
+    st.warning(
+        "Use clinical judgement. The model is one input among many. "
+        "Consider referral when **any** of these are present, even if the model "
+        "predicts low risk:",
+        icon="⚠️",
+    )
     st.markdown("""
-The model considers **15 patient characteristics** across four domains:
+- BP ≥140/90 mmHg on two occasions
+- Severe anaemia (Hb <8 g/dL)
+- Fasting glucose ≥5.1 mmol/L
+- Bleeding, severe headache, blurred vision, or epigastric pain
+- Reduced foetal movements
+- Prior obstetric complication
 """)
 
+    st.markdown("---")
+
+    # ─── Best practices ────────────────────────────────────────────────────
+    st.markdown("### Best practices when using MaternaCare")
+    practices = [
+        "✅  Verify patient information before assessment.",
+        "✅  Use MaternaCare alongside routine antenatal evaluation.",
+        "✅  Repeat assessment if the patient's condition changes.",
+        "✅  Clinical judgement always takes priority over model predictions.",
+        "✅  High-risk predictions should prompt timely referral according to national maternal health guidelines.",
+    ]
+    for p in practices:
+        st.markdown(f"<div class='practice-item'>{p}</div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE: ABOUT
+# ══════════════════════════════════════════════════════════════════════════════
+elif page.strip().startswith("ℹ️"):
+    st.markdown("# ℹ️ About MaternaCare")
+
+    st.markdown("""
+MaternaCare is a clinical decision-support application developed as part of a
+final-year Biomedical Engineering project. The project investigates the
+application of machine learning techniques for early identification of
+high-risk pregnancies using routinely collected maternal health indicators
+within the Nigerian healthcare context.
+""")
+
+    # ─── Why this tool exists ──────────────────────────────────────────────
+    st.markdown("### Why this tool exists")
+    st.markdown("""
+Maternal mortality in Nigeria remains among the highest globally. Early
+identification of high-risk pregnancies allows timely intervention — but in
+resource-constrained settings, frontline workers often lack decision-support
+tools to systematically weigh multiple risk factors. MaternaCare addresses
+that gap with a fast, model-driven second opinion.
+""")
+
+    st.markdown("---")
+
+    # ─── Risk factors used by the model (moved from Clinical Guide) ────────
+    st.markdown("### Risk factors used by the model")
+    st.markdown(
+        "The model considers **14 patient characteristics** across four domains:"
+    )
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("""
 **👤 Demographics**
 - Maternal age (risk ↑ if <18 or ≥35)
 - Socioeconomic status
-- Type of care facility
 
 **🤱 Obstetric history**
 - Parity (number of prior births)
@@ -1198,70 +1119,78 @@ The model considers **15 patient characteristics** across four domains:
 """)
 
     st.markdown("---")
-    st.markdown("### When to refer to a higher-level facility")
-    st.warning(
-        "Use clinical judgement. The model is one input among many. "
-        "Consider referral when **any** of these are present, even if the model "
-        "predicts low risk:",
-        icon="⚠️",
+
+    # ─── Model performance at a glance (moved from Home) ───────────────────
+    st.markdown("### Model performance at a glance")
+    if os.path.exists(COMPARISON_PATH):
+        df = load_comparison()
+        metric_cols = [c for c in df.columns
+                       if c in ["accuracy", "precision", "recall", "f1_score", "roc_auc"]]
+        styled = (df[metric_cols].style
+                  .highlight_max(axis=0, props="background-color:#FCE4EC;font-weight:bold;color:#212121")
+                  .format("{:.4f}"))
+        st.dataframe(styled, use_container_width=True)
+    else:
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: st.metric("Training records", "5,000")
+        with c2: st.metric("MLP F1 score",     "0.78")
+        with c3: st.metric("MLP AUC-ROC",      "0.93")
+        with c4: st.metric("Patient features", "14")
+
+    st.markdown("---")
+
+    # ─── Models compared ───────────────────────────────────────────────────
+    st.markdown("### Models compared")
+    st.markdown(
+        "This project compared four machine learning models to determine the "
+        "best-performing model. The deployed application performs inference "
+        "using only the **MLP Neural Network**, which achieved the highest F1 "
+        "score. The other models remain documented here for transparency:"
     )
+    models_df = pd.DataFrame({
+        "Model":    ["MLP Neural Network", "Logistic Regression", "Random Forest", "Decision Tree"],
+        "Type":     ["Feedforward deep learning", "Linear, interpretable baseline",
+                     "Ensemble (bagged trees)", "Rule-based, transparent"],
+        "F1 score": [0.777, 0.759, 0.728, 0.619],
+        "Deployed": ["✅ Yes", "—", "—", "—"],
+    }).set_index("Model")
+    st.dataframe(models_df, use_container_width=True)
+
+    st.markdown("---")
+
+    # ─── Ethical use ───────────────────────────────────────────────────────
+    st.markdown("### Ethical use")
     st.markdown("""
-- BP ≥140/90 mmHg on two occasions
-- Severe anaemia (Hb <8 g/dL)
-- Fasting glucose ≥5.1 mmol/L
-- Bleeding, severe headache, blurred vision, or epigastric pain
-- Reduced foetal movements
-- Prior obstetric complication
-""")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE: ABOUT
-# ══════════════════════════════════════════════════════════════════════════════
-elif page.strip().startswith("ℹ️"):
-    st.markdown("# ℹ️ About MaternaCare")
-
-    st.markdown("""
-### The project
-**MaternaCare** is the Streamlit deployment of a Final Year Project titled:
-
-> *"Predictive Model for High-Risk Pregnancy Identification Using Machine
-> Learning: A Comparative Study with Synthetic Nigerian Maternal Health Data."*
-
-### Why this tool exists
-Maternal mortality in Nigeria remains among the highest globally. Early
-identification of high-risk pregnancies allows timely intervention — but in
-resource-constrained settings, frontline workers often lack decision-support
-tools to systematically weigh multiple risk factors. MaternaCare addresses
-that gap with a fast, model-driven second opinion.
-
-### Dataset
-- **5,000 synthetic records** generated from published Nigerian and West
-  African epidemiological parameters (15 peer-reviewed studies)
-- **15 patient characteristics** across demographics, obstetric history,
-  vital signs, laboratory values, and medical history
-- **Target prevalence:** ~29.6% high-risk pregnancies
-
-### Models compared
-| Model | Strength |
-|---|---|
-| Logistic Regression | Most interpretable, best AUC-ROC (0.93) |
-| Decision Tree | Transparent rule-based reasoning |
-| Random Forest | Robust ensemble approach |
-| MLP Neural Network | Best F1 score (0.78) |
-
-### Ethical use
 - 🩹 This tool was trained on **synthetic data** and **must be externally
   validated** on real patient data before clinical deployment
 - 🩹 It is a **decision-support aid**, not an autonomous decision-maker
-- 🩹 The model has a false-negative rate (~14% for MLP) — clinical vigilance
-  remains essential
+- 🩹 The model has a false-negative rate (~14%) — clinical vigilance remains essential
 - 🩹 Feature distributions are calibrated for Nigeria; transfer to other
   populations requires recalibration
-
-### Project repository
-[github.com/mbanwusifrancisca/high-risk-pregnancy-prediction-deploy](https://github.com/mbanwusifrancisca/high-risk-pregnancy-prediction-deploy)
 """)
+
+    st.markdown("---")
+
+    # ─── Project repository ────────────────────────────────────────────────
+    st.markdown("### Project repository")
+    st.markdown(
+        "Source code, training pipeline, and documentation are available at: "
+        "[github.com/mbanwusifrancisca/high-risk-pregnancy-prediction-deploy]"
+        "(https://github.com/mbanwusifrancisca/high-risk-pregnancy-prediction-deploy)"
+    )
+
+    st.markdown("---")
+
+    # ─── Developer ─────────────────────────────────────────────────────────
+    st.markdown("### Developer")
+    st.markdown("""
+<div class='dev-card'>
+  <div class='dev-avatar'>MF</div>
+  <h3>Mbanwusi Francisca</h3>
+  <p class='dev-role'>Final-Year Biomedical Engineering Student</p>
+  <p class='dev-email'>📧 <a href='mailto:mbanwusifrancisca@gmail.com'>mbanwusifrancisca@gmail.com</a></p>
+</div>
+""", unsafe_allow_html=True)
 
     st.markdown("---")
     st.caption(

@@ -1,2 +1,20 @@
-[runtime] 
-python_version = "3.11" 
+# .streamlit/config.toml — MaternaCare theme
+# ──────────────────────────────────────────────────────────────────────────────
+# Locks the app to light mode so it renders identically regardless of the
+# user's OS dark-mode setting. This eliminates the readability issues that
+# occur when custom CSS clashes with Streamlit's auto dark theme.
+# ──────────────────────────────────────────────────────────────────────────────
+
+[theme]
+base = "light"
+primaryColor = "#E91E63"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FAFAFA"
+textColor = "#212121"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false

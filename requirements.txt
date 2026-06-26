@@ -1,9 +1,8 @@
-# requirements.txt — High-Risk Pregnancy Prediction (Streamlit Cloud deployment)
+# requirements.txt — MaternaCare (Streamlit Cloud deployment)
 # ──────────────────────────────────────────────────────────────────────────────
-# Packages required by app.py at runtime.
-# imbalanced-learn and pyyaml are training-only; they are NOT needed at inference.
-# seaborn is not imported by app.py; removed.
-# tensorflow-cpu is kept because MLP (.keras) model loading requires it.
+# tensorflow-cpu==2.17.0 ships with Keras 3, which is required to load the
+# mlp_model.keras file (it was saved with Keras 3's batch_shape format).
+# Keras 2 throws "Unrecognized keyword arguments: ['batch_shape', 'optional']".
 # ──────────────────────────────────────────────────────────────────────────────
 
 numpy
@@ -12,4 +11,4 @@ scikit-learn
 joblib
 matplotlib
 streamlit
-tensorflow-cpu==2.15.1
+tensorflow-cpu==2.17.0
