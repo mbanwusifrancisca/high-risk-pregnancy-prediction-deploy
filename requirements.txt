@@ -1,8 +1,11 @@
 # requirements.txt — MaternaCare (Streamlit Cloud deployment)
 # ──────────────────────────────────────────────────────────────────────────────
-# tensorflow-cpu==2.17.0 ships with Keras 3, which is required to load the
-# mlp_model.keras file (it was saved with Keras 3's batch_shape format).
-# Keras 2 throws "Unrecognized keyword arguments: ['batch_shape', 'optional']".
+# tensorflow-cpu==2.21.0 is the latest stable release (March 2026) and ships
+# with a Keras 3 version new enough to load the MLP model, which was saved
+# with a recent Keras 3 (uses `quantization_config` field on Dense layers).
+#
+# Older TF/Keras versions throw:
+#   "Unrecognized keyword arguments passed to Dense: {'quantization_config': None}"
 # ──────────────────────────────────────────────────────────────────────────────
 
 numpy
@@ -11,4 +14,4 @@ scikit-learn
 joblib
 matplotlib
 streamlit
-tensorflow-cpu==2.17.0
+tensorflow-cpu==2.21.0
